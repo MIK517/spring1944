@@ -87,6 +87,7 @@ local spGetActiveCmdDesc    = Spring.GetActiveCmdDesc
 local spGetActiveCmdDescs   = Spring.GetActiveCmdDescs
 local spGetSelectedUnits    = Spring.GetSelectedUnits
 local spGetFullBuildQueue   = Spring.GetFullBuildQueue
+local spIsUnitSelected      = Spring.IsUnitSelected
 local spSendCommands        = Spring.SendCommands
 local spGetViewGeometry     = Spring.GetViewGeometry
 
@@ -641,6 +642,26 @@ end
 
 function widget:CommandsChanged()
     updateRequired = true
+end
+
+-- A new order replacing a build queue, or a build finishing, does not fire
+-- CommandsChanged, so the queue counts on the build buttons would go stale.
+function widget:UnitCommand(unitID)
+    if spIsUnitSelected(unitID) then
+        updateRequired = true
+    end
+end
+
+function widget:UnitCmdDone(unitID)
+    if spIsUnitSelected(unitID) then
+        updateRequired = true
+    end
+end
+
+function widget:UnitFromFactory(unitID, unitDefID, unitTeam, factID)
+    if spIsUnitSelected(factID) then
+        updateRequired = true
+    end
 end
 
 function widget:DrawScreen()
