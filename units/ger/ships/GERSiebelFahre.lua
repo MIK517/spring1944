@@ -13,6 +13,7 @@ local GER_SiebelFahre = Boat:New{
 	transportMass			= 4000,
 	transportSize			= 2,
 	turnRate				= 30,	
+	script					= "LandingCraft.lua",
 	weapons = {	
 		[1] = {
 			name				= "flak3820mmhe",
@@ -47,24 +48,40 @@ local GER_SiebelFahre = Boat:New{
 	},
 	customparams = {
 		supplyRange				= 400,
-		--[[ enable me later when using LUS
-		deathanim = {
-			["z"] = {angle = -30, speed = 10},
-		},]]
+		deathanim = { -- list, then sink
+			["x"] = {angle = 15, speed = 2.5},
+			["z"] = {angle = -5, speed = 2.5},
+		},
 		normaltex			= "unittextures/GERSiebelFahre_normals.png",
-	},
-	sfxtypes = { -- remove once using LUS
-		explosionGenerators = {
-			[1] = "custom:SMOKEPUFF_GPL_FX",
-			[2] = "custom:PLACEHOLDER_EFFECT01",
-			[3] = "custom:PLACEHOLDER_EFFECT02",
-			[4] = "custom:PLACEHOLDER_EFFECT03",
-			[5] = "custom:PLACEHOLDER_EFFECT04",
-			[6] = "custom:XSMALL_MUZZLEFLASH",
-			[7] = "custom:XSMALL_MUZZLEDUST",
-			[8] = "custom:MG_MUZZLEFLASH",
-			[9] = "custom:SMALL_MUZZLEFLASH",
-			[10] = "custom:SMALL_MUZZLEDUST",
+		turretturnspeed		= 40,
+		elevationspeed		= 45,
+		landingcraft = {
+			loader			= "crane",
+			slots			= {"load1", "load2", "load3"},
+			loadtime		= 500,
+			unloadtime		= 1000,
+			shatterseverity	= 0.99,
+			-- 4-6 are the A.A. modes of the guns 1-3
+			weapons = {
+				[1] = {aim = "mount_20_1", pitch = "sleeve_20_1", flare = "flare_20_1", barrel = "barrel_20_1",
+					recoil = 0.4, recoilspeed = 10, returnspeed = 1, recoiltime = 200,
+					ceg = "XSMALL_MUZZLEFLASH", dust = "XSMALL_MUZZLEDUST"},
+				[2] = {aim = "mount_20_2", pitch = "sleeve_20_2", flare = "flare_20_2", barrel = "barrel_20_2",
+					recoil = 0.4, recoilspeed = 10, returnspeed = 1, recoiltime = 200,
+					ceg = "XSMALL_MUZZLEFLASH", dust = "XSMALL_MUZZLEDUST"},
+				[3] = {aim = "mount_20_3", pitch = "sleeve_20_3", flare = "flare_20_3", barrel = "barrel_20_3", heading = 180,
+					recoil = 0.4, recoilspeed = 10, returnspeed = 1, recoiltime = 200,
+					ceg = "XSMALL_MUZZLEFLASH", dust = "XSMALL_MUZZLEDUST"},
+				[4] = {aim = "mount_20_1", pitch = "sleeve_20_1", flare = "flare_20_1", barrel = "barrel_20_1", aa = true,
+					recoil = 0.4, recoilspeed = 10, returnspeed = 1, recoiltime = 200,
+					ceg = "XSMALL_MUZZLEFLASH", dust = "XSMALL_MUZZLEDUST"},
+				[5] = {aim = "mount_20_2", pitch = "sleeve_20_2", flare = "flare_20_2", barrel = "barrel_20_2", aa = true,
+					recoil = 0.4, recoilspeed = 10, returnspeed = 1, recoiltime = 200,
+					ceg = "XSMALL_MUZZLEFLASH", dust = "XSMALL_MUZZLEDUST"},
+				[6] = {aim = "mount_20_3", pitch = "sleeve_20_3", flare = "flare_20_3", barrel = "barrel_20_3", heading = 180, aa = true,
+					recoil = 0.4, recoilspeed = 10, returnspeed = 1, recoiltime = 200,
+					ceg = "XSMALL_MUZZLEFLASH", dust = "XSMALL_MUZZLEDUST"},
+			},
 		},
 	},
 }

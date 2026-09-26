@@ -7,6 +7,7 @@ local GBR_LCA = InfantryLandingCraft:New{
 	maxReverseVelocity		= 0.685,
 	maxVelocity				= 2,
 	turnRate				= 40,	
+	script					= "LandingCraft.lua",
 	weapons = {	
 		[1] = {
 			name				= "bren",
@@ -30,16 +31,21 @@ local GBR_LCA = InfantryLandingCraft:New{
 				},
 			},
 		},
-		--[[ enable me later when using LUS
 		deathanim = {
 			["z"] = {angle = -30, speed = 10},
-		},]]
+		},
 
 		normaltex			= "unittextures/GBRLCA_normals.png",
-	},
-	sfxtypes = { -- remove once using LUS
-		explosionGenerators = {
-			"custom:MG_MUZZLEFLASH",
+		turretturnspeed		= 45,
+		elevationspeed		= 45,
+		landingcraft = {
+			loader		= "crane",
+			ramp		= {piece = "ramp", angle = 90, speed = 30, closedelay = 1500},
+			loadtime	= 50,
+			unloadtime	= 50,
+			weapons = {
+				[1] = {aim = "bren_mount", pitch = "bren_gun", flare = "bren_flare", ceg = "MG_MUZZLEFLASH"},
+			},
 		},
 	},
 }

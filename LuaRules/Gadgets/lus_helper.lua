@@ -410,6 +410,8 @@ function gadget:GamePreload()
 		end
 		-- Children
 		info.children = table.unserialize(cp.children)
+		-- LandingCraft.lua setup
+		info.landingCraft = table.unserialize(cp.landingcraft)
 		-- And finally, stick it in GG for the script to access
 		GG.lusHelper[unitDefID] = info
 	end
