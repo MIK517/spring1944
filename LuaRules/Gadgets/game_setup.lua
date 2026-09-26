@@ -245,9 +245,85 @@ local function SeedKnownStartPositions()
 	end
 end
 
+-- Spacing tried, widest first, when a team needs a spot that is not one of the
+-- box's start points. A base spreads a few hundred elmos around its HQ.
+local FREE_SPOT_SEPARATIONS = {600, 400, MIN_START_SEPARATION}
+local FREE_SPOT_RING_STEP = 100
+local FREE_SPOT_MAX_RADIUS = 2000
+local FREE_SPOT_EDGE_MARGIN = 128
+local FREE_SPOT_MIN_NORMAL_Y = 0.8 -- about 37 degrees of slope
+
+local function IsFreeStartSpot(boxID, x, z, separationSq)
+	if x < FREE_SPOT_EDGE_MARGIN or x > Game.mapSizeX - FREE_SPOT_EDGE_MARGIN
+	or z < FREE_SPOT_EDGE_MARGIN or z > Game.mapSizeZ - FREE_SPOT_EDGE_MARGIN then
+		return false
+	end
+	if boxID and GG.CheckStartbox and not GG.CheckStartbox(boxID, x, z) then
+		return false
+	end
+	if GetGroundHeight(x, z) <= 0 then
+		return false
+	end
+	local _, normalY = Spring.GetGroundNormal(x, z)
+	if normalY < FREE_SPOT_MIN_NORMAL_Y then
+		return false
+	end
+	for _, pos in pairs(resolvedStartPos) do
+		local dx, dz = pos[1] - x, pos[3] - z
+		if (dx * dx + dz * dz) < separationSq then
+			return false
+		end
+	end
+	return true
+end
+
+-- Search rings around the seed points for dry, reasonably flat ground inside the
+-- box that keeps clear of every team already placed. Returns nil if nothing fits.
+local function FindFreeStartSpot(boxID, seeds)
+	for t = 1, #FREE_SPOT_SEPARATIONS do
+		local separationSq = FREE_SPOT_SEPARATIONS[t] * FREE_SPOT_SEPARATIONS[t]
+		for radius = 0, FREE_SPOT_MAX_RADIUS, FREE_SPOT_RING_STEP do
+			local steps = (radius == 0) and 1 or math.max(8, math.floor(2 * math.pi * radius / FREE_SPOT_RING_STEP))
+			for step = 0, steps - 1 do
+				local angle = 2 * math.pi * step / steps
+				local ox, oz = radius * math.cos(angle), radius * math.sin(angle)
+				for i = 1, #seeds do
+					local x, z = seeds[i][1] + ox, seeds[i][2] + oz
+					if IsFreeStartSpot(boxID, x, z, separationSq) then
+						return x, z
+					end
+				end
+			end
+		end
+	end
+	return nil
+end
+
+-- Where to start looking for a free spot: the box's start points, else the
+-- middle of each of its triangles, else the middle of the map.
+local function GetFreeSpotSeeds(boxConfig)
+	local startpoints = boxConfig and boxConfig.startpoints
+	if startpoints and #startpoints > 0 then
+		return startpoints
+	end
+	local seeds = {}
+	local boxes = boxConfig and boxConfig.boxes
+	if boxes then
+		for i = 1, #boxes do
+			local x1, z1, x2, z2, x3, z3 = unpack(boxes[i])
+			seeds[#seeds + 1] = {(x1 + x2 + x3) / 3, (z1 + z2 + z3) / 3}
+		end
+	end
+	if #seeds == 0 then
+		seeds[1] = {HALF_MAP_X, HALF_MAP_Z}
+	end
+	return seeds
+end
+
 -- Hand out a start point of the team's own start box, skipping any point that is
 -- already spoken for -- otherwise an AFK player lands on top of the team-mate who
--- placed there. Once every point in the box is taken it falls back to plain
+-- placed there. Once every point in the box is taken it tries to find free
+-- ground elsewhere in the box, and only if that fails falls back to plain
 -- recycling, which is what Zero-K does unconditionally.
 local function TakeAutoStartPosition(teamID)
 	local allyTeamID = select(6, GetTeamInfo(teamID, false))
@@ -255,18 +331,25 @@ local function TakeAutoStartPosition(teamID)
 	local boxConfig = boxID and GG.startBoxConfig and GG.startBoxConfig[boxID]
 	local startpoints = boxConfig and boxConfig.startpoints
 
-	if not (startpoints and #startpoints > 0) then
-		return HALF_MAP_X, GetGroundHeight(HALF_MAP_X, HALF_MAP_Z), HALF_MAP_Z
+	if startpoints and #startpoints > 0 then
+		local n = allyTeamAutoPlaced[allyTeamID] or 0
+		for _ = 1, #startpoints do
+			local point = startpoints[(n % #startpoints) + 1]
+			n = n + 1
+			if not StartPositionIsTaken(point[1], point[2]) then
+				allyTeamAutoPlaced[allyTeamID] = n
+				return point[1], GetGroundHeight(point[1], point[2]), point[2]
+			end
+		end
 	end
 
-	local n = allyTeamAutoPlaced[allyTeamID] or 0
-	for _ = 1, #startpoints do
-		local point = startpoints[(n % #startpoints) + 1]
-		n = n + 1
-		if not StartPositionIsTaken(point[1], point[2]) then
-			allyTeamAutoPlaced[allyTeamID] = n
-			return point[1], GetGroundHeight(point[1], point[2]), point[2]
-		end
+	local freeX, freeZ = FindFreeStartSpot(boxConfig and boxID, GetFreeSpotSeeds(boxConfig))
+	if freeX then
+		return freeX, GetGroundHeight(freeX, freeZ), freeZ
+	end
+
+	if not (startpoints and #startpoints > 0) then
+		return HALF_MAP_X, GetGroundHeight(HALF_MAP_X, HALF_MAP_Z), HALF_MAP_Z
 	end
 
 	local index = allyTeamAutoPlaced[allyTeamID] or 0
