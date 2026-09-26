@@ -1,14 +1,16 @@
--- Landing craft that carry their own weapons and unload with a
--- turret/grabber/link crane. Replaces the old per-unit COB scripts. Everything unit specific comes from the
+-- Landing craft that carry their own weapons and load/unload with either a
+-- turret/grabber/link crane or a load_shoulder/load_arm arm. Replaces the old
+-- per-unit COB scripts. Everything unit specific comes from the
 -- customParams.landingcraft table (parsed by lus_helper into info.landingCraft):
 --
 -- landingcraft = {
---   loader = "crane",
+--   loader = "crane" | "arm",
 --   ramp = {piece = "ramp", angle = 90, speed = 30,      -- degrees, deg/s
 --           slide = 6.8, slidespeed = 6,                  -- optional: slide out along z first
 --           closedelay = 1500},                           -- optional: close this long after (un)loading
 --   loadtime = 500, unloadtime = 1000,                    -- ms the craft stays busy per unit
 --   slots = {"load1", "load2"},                           -- crane: pieces showing the first passengers
+--   hideinfantry = true, carry = "base", pickuparm = true, -- arm: where passengers ride
 --   shatterseverity = 0.5,                                -- damage share above which the wreck shatters
 --   weapons = {
 --     [1] = {aim = "mount", pitch = "sleeve", flare = "flare", aimfrom = "mount",
@@ -376,6 +378,72 @@ if cfg.loader == "crane" then
 		Sleep(UNLOAD_TIME)
 		SetUnitValue(COB.BUSY, 0)
 		CloseRampLater()
+	end
+
+elseif cfg.loader == "arm" then
+	local shoulder = NamedPiece("load_shoulder")
+	local arm = NamedPiece("load_arm")
+	local carry = NamedPiece(cfg.carry or "base")
+	local hideInfantry = cfg.hideinfantry
+	local pickupArm = cfg.pickuparm
+
+	-- local heading from the base piece to world position x, z, and distance
+	local function Reach(x, z)
+		local bx, _, bz = GetUnitPiecePosDir(unitID, base)
+		local dx, dz = x - bx, z - bz
+		local heading = (GetHeadingFromVector(dx, dz) - GetUnitHeading(unitID)) / 32768 * pi
+		return heading, sqrt(dx * dx + dz * dz)
+	end
+
+	Loader = {}
+
+	function Loader.Pickup(passengerID, fromLua)
+		if not fromLua then
+			SetUnitValue(COB.BUSY, 1)
+			OpenRamp()
+			if pickupArm then
+				-- reach out, grab the passenger and swing it aboard
+				local ux, _, uz = Spring.GetUnitPosition(passengerID)
+				local heading, dist = Reach(ux, uz)
+				Turn(shoulder, y_axis, heading)
+				Move(arm, z_axis, dist)
+				AttachUnit(arm, passengerID)
+				Move(arm, z_axis, 10, 2400)
+				WaitForMove(arm, z_axis)
+			end
+			if not Spring.ValidUnitID(passengerID) then
+				SetUnitValue(COB.BUSY, 0)
+				return
+			end
+		end
+		local passengerDef = UnitDefs[GetUnitDefID(passengerID)]
+		if hideInfantry and passengerDef and passengerDef.modCategories.infantry then
+			AttachUnit(-1, passengerID)
+		else
+			AttachUnit(carry, passengerID)
+		end
+		if not fromLua then
+			SetUnitValue(COB.BUSY, 0)
+		end
+	end
+
+	function Loader.Drop(passengerID, x, y, z)
+		-- only put passengers ashore, never into the water
+		if GetGroundHeight(x, z) <= 0 then
+			return
+		end
+		SetUnitValue(COB.BUSY, 1)
+		OpenRamp()
+		local heading, dist = Reach(x, z)
+		Turn(shoulder, y_axis, heading)
+		AttachUnit(arm, passengerID)
+		Move(arm, z_axis, dist + 5, 10000)
+		WaitForMove(arm, z_axis)
+		if GetUnitTransporter(passengerID) == unitID then
+			DropUnit(passengerID)
+		end
+		Move(arm, z_axis, 0)
+		SetUnitValue(COB.BUSY, 0)
 	end
 end
 

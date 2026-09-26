@@ -9,13 +9,20 @@ local JPN_Daihatsu = InfantryLandingCraft:New{
 	transportCapacity		= 40,
 	transportMass			= 2000,
 	turnRate				= 50,
+	script					= "LandingCraft.lua",
 
 	customparams = {
-		--[[ enable me later when using LUS
 		deathanim = {
 			["z"] = {angle = -30, speed = 10},
-		},]]
+		},
 		normaltex			= "unittextures/JPNDaihatsu_normals.png",
+		landingcraft = {
+			loader			= "arm",
+			ramp			= {piece = "ramp", angle = 60, speed = 30},
+			hideinfantry	= true,
+			carry			= "base",
+			pickuparm		= true,
+		},
 	},
 }
 

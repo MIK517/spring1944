@@ -11,6 +11,7 @@ local JPN_TokuDaihatsu = TankLandingCraft:New{
 	transportMass			= 2100,
 	  transportSize=9,
 	turnRate				= 50,	
+	script					= "LandingCraft.lua",
 	weapons = {	
 		[1] = {
 			name				= "Type9625mmAA",
@@ -25,19 +26,24 @@ local JPN_TokuDaihatsu = TankLandingCraft:New{
 	},
 	customparams = {
 		supplyrange				= 350, -- overwrite
-		--[[ enable me later when using LUS
 		deathanim = {
 			["z"] = {angle = -30, speed = 10},
-		},]]
+		},
 		normaltex			= "unittextures/JPNTokuDaihatsu_normals.png",
-	},
-	sfxtypes = { -- remove once using LUS
-		explosionGenerators = {
-			[1] = "custom:SMOKEPUFF_GPL_FX",
-			[4] = "custom:SMALL_MUZZLEFLASH",
-			[5] = "custom:SMALL_MUZZLEDUST",
-			[6] = "custom:XSMALL_MUZZLEFLASH",
-			[7] = "custom:XSMALL_MUZZLEDUST",
+		turretturnspeed		= 60,
+		elevationspeed		= 60,
+		landingcraft = {
+			loader			= "arm",
+			ramp			= {piece = "ramp", angle = 45, speed = 30},
+			carry			= "cargo",
+			weapons = {
+				[1] = {aim = "turret", pitch = "sleeve", flare = "flare", barrel = "barrel", heading = 180, aa = true,
+					recoil = 0.3, recoilspeed = 10, returnspeed = 5, recoiltime = 100,
+					ceg = "SMALL_MUZZLEFLASH", dust = "SMALL_MUZZLEDUST"},
+				[2] = {aim = "turret", pitch = "sleeve", flare = "flare", barrel = "barrel", heading = 180,
+					recoil = 0.3, recoilspeed = 10, returnspeed = 5, recoiltime = 100,
+					ceg = "SMALL_MUZZLEFLASH", dust = "SMALL_MUZZLEDUST"},
+			},
 		},
 	},
 }

@@ -9,6 +9,7 @@ local ITA_ML = InfantryLandingCraft:New{
 	transportCapacity		= 22,
 	transportMass			= 1300,
 	turnRate				= 55,	
+	script					= "LandingCraft.lua",
 	weapons = {	
 		[1] = {
 			name				= "BredaM1931AA",
@@ -39,16 +40,25 @@ local ITA_ML = InfantryLandingCraft:New{
 				},
 			},
 		},
-		--[[ enable me later when using LUS
 		deathanim = {
 			["z"] = {angle = -30, speed = 10},
-		},]]
+		},
 
 		normaltex			= "unittextures/ITAML_normals.png",
-	},
-	sfxtypes = { -- remove once using LUS
-		explosionGenerators = {
-			"custom:MG_MUZZLEFLASH",
+		turretturnspeed		= 60,
+		elevationspeed		= 60,
+		landingcraft = {
+			loader			= "arm",
+			ramp			= {piece = "ladder", angle = 30, speed = 60, slide = 6.8, slidespeed = 6},
+			hideinfantry	= true,
+			carry			= "base",
+			pickuparm		= true,
+			weapons = {
+				[1] = {aim = "turret", pitch = "gun", flare = "flare", aa = true,
+					ceg = "SMALL_MUZZLEFLASH", dust = "SMALL_MUZZLEDUST"},
+				[2] = {aim = "turret", pitch = "gun", flare = "flare",
+					ceg = "SMALL_MUZZLEFLASH", dust = "SMALL_MUZZLEDUST"},
+			},
 		},
 	},
 }
