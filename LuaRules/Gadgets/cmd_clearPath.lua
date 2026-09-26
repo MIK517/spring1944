@@ -70,7 +70,7 @@ local function BlowMine(engineerID)
 		return
 	end
 	local mineID = clearer.mineID
-	clearer.mineID = nil -- the script callback and the backup timer both land here
+	clearer.mineID = nil
 	clearer.active = false
 	if ValidUnitID(engineerID) and not clearer.done then
 		Spring.UnitScript.CallAsUnit(engineerID, stopClearCache[engineerID])
@@ -107,9 +107,8 @@ local function ClearWaypoint(unitID, x, z)
 
 	
 	if #mines > 0 then
-		-- MINE_CLEAR_TIME is in ms; DelayCall and blowFrame count frames
+		-- MINE_CLEAR_TIME is in ms; blowFrame counts frames
 		local clearFrames = math.ceil(MINE_CLEAR_TIME * Game.gameSpeed / 1000)
-		GG.Delay.DelayCall(BlowMine, {unitID}, clearFrames)
 		clearers[unitID].blowFrame = currentFrame + clearFrames
 		clearers[unitID].mineID = mines[math.random(#mines)]
 		
