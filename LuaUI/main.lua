@@ -13,6 +13,10 @@
 
 Spring.SendCommands({"ctrlpanel " .. LUAUI_DIRNAME .. "ctrlpanel.txt"})
 
+-- The engine's automatic metal view is deprecated and S:44 has no buildable
+-- metal extractors; turning it off also silences the deprecation warning.
+Spring.SetAutoShowMetal(false)
+
 -- rml_setup.lua is not included: S:44 has no RmlUi interface, and the engine's
 -- stock copy loads Fonts/FreeMonoBold.ttf, which the engine does not ship.
 VFS.Include(LUAUI_DIRNAME .. 'utils.lua', nil)--, VFS.ZIP)
