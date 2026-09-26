@@ -719,7 +719,11 @@ function BaseMgr.GameFrame(f)
             -- Look for the worst scored factory to ask it to wait
             local score, factory = MAX_INT, nil
             for u, s in pairs(myFactoriesScore) do
-                if s < score then
+                if myFactories[u] == nil then
+                    myFactoriesScore[u] = nil  -- the factory is gone
+                elseif not is_waiting[u] and s < score then
+                    -- skip factories already waiting: CMD_WAIT toggles, so
+                    -- ordering it again would put them back to work
                     score, factory = s, u
                 end
             end
@@ -841,6 +845,7 @@ function BaseMgr.UnitDestroyed(unitID, unitDefID, unitTeam, attackerID, attacker
     end
     if unit_chains.IsFactory(unitDefID) then
         myFactories[unitID] = nil
+        myFactoriesScore[unitID] = nil
         updateBuildOptions()
     end
     if unit_chains.IsPackedFactory(unitDefID) or unit_chains.IsGunToDeploy(unitDefID) then

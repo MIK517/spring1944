@@ -141,7 +141,7 @@ local function SpawnTransportSquad(unitID, teamID, transportSquad)
 		if (passID ~= nil) then
 			local passDefCP = UnitDefNames[passengerDefName].customParams
 			if passDefCP and passDefCP.maxammo then
-				Spring.SetUnitRulesParam(passID, "ammo", passDefCP.maxammo)
+				Spring.SetUnitRulesParam(passID, "ammo", tonumber(passDefCP.maxammo))
 			end
 			local env = Spring.UnitScript.GetScriptEnv(unitID)
 			if env then
