@@ -43,6 +43,13 @@ local SCORE_RANDOMIZER = 0.05
 -- starting a new one
 local CHAIN_GIVING_UP_TIME = 1.0 * 60.0
 
+-- Production safeguard. C.R.A.I.G. cannot route around water, cliffs or
+-- anti-tank hedges, so on such maps its units pile up instead of dying at the
+-- front. All production pauses while this team, or the game as a whole
+-- (every team, Gaia included), is at or above its cap, and resumes below it.
+local MAX_TEAM_UNITS  = 600
+local MAX_TOTAL_UNITS = 3000
+
 -- speedups
 local CMD_WAIT   = CMD.WAIT
 local random, min, max = math.random, math.min, math.max
@@ -55,6 +62,7 @@ local GetFactoryCommandCount = Spring.GetFactoryCommandCount
 local GetTeamResources   = Spring.GetTeamResources
 local GetGameSeconds     = Spring.GetGameSeconds
 local GetUnitRulesParam  = Spring.GetUnitRulesParam
+local GetTeamUnitCount   = Spring.GetTeamUnitCount
 
 -- Squads
 local squadDefs = VFS.Include("LuaRules/Configs/squad_defs.lua")
@@ -76,6 +84,20 @@ local myConstructors = {}     -- Units which may build the base
 local myFactories = {}        -- Factories already available, with their queue
 local myFactoriesScore = {}   -- Score associated to the factory
 local myPackedFactories = {}  -- Packed factories, which shall unpack
+
+local allTeams = Spring.GetTeamList()
+local productionPaused = false
+
+local function IsOverUnitCap()
+    if (GetTeamUnitCount(myTeamID) or 0) >= MAX_TEAM_UNITS then
+        return true
+    end
+    local total = 0
+    for i = 1, #allTeams do
+        total = total + (GetTeamUnitCount(allTeams[i]) or 0)
+    end
+    return total >= MAX_TOTAL_UNITS
+end
 
 local function GetBuildingChains()
     local producers = {}
@@ -367,6 +389,12 @@ local function ResolveMorphingCmd(origDefID, destDefID)
 end
 
 local function StartChain()
+    if productionPaused then
+        -- Drop the chain; a new one is selected once production resumes
+        selected_chain = nil
+        return
+    end
+
     local target_udef = UnitDefNames[selected_chain.units[1]]
 
     -- Let's try to use the already known builder
@@ -500,6 +528,9 @@ end
 local unitBuiltBy = {}
 
 local function IdleFactory(unitID)
+    if productionPaused then
+        return
+    end
     if #myFactories[unitID] > 0 then
         -- We still have work to do...
         return
@@ -659,6 +690,19 @@ function BaseMgr.GameFrame(f)
     if not is_gann_trained then
         local f = VFS.Include("LuaRules/Gadgets/craig/base/gann_train.lua")
         is_gann_trained = f(base_gann, myTeamID)
+    end
+
+    local overCap = IsOverUnitCap()
+    if overCap ~= productionPaused then
+        productionPaused = overCap
+        if overCap then
+            Log("Unit cap reached, pausing production")
+        else
+            Log("Below the unit cap, resuming production")
+        end
+    end
+    if productionPaused then
+        return
     end
 
     -- Check if the building chain is not progressing, so we must move to a new
