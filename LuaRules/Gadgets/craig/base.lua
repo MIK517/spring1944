@@ -50,6 +50,8 @@ local GetUnitDefID       = Spring.GetUnitDefID
 local GetGameSeconds     = Spring.GetGameSeconds
 local GetUnitCommands    = Spring.GetUnitCommands
 local GetFactoryCommands = Spring.GetFactoryCommands
+local GetUnitCommandCount    = Spring.GetUnitCommandCount
+local GetFactoryCommandCount = Spring.GetFactoryCommandCount
 local GetTeamResources   = Spring.GetTeamResources
 local GetGameSeconds     = Spring.GetGameSeconds
 local GetUnitRulesParam  = Spring.GetUnitRulesParam
@@ -608,13 +610,13 @@ end
 
 local function isBuilderIdle(unitID)
     if myFactories[unitID] ~= nil then
-        local isIdle = (GetFactoryCommands(unitID, 0) or 0) == 0
+        local isIdle = (GetFactoryCommandCount(unitID) or 0) == 0
         if isIdle then
             myFactories[unitID] = {}
         end
         return isIdle
     elseif myConstructors[unitID] ~= nil or myPackedFactories[unitID] ~= nil then
-        return (GetUnitCommands(unitID, 0) or 0) == 0
+        return (GetUnitCommandCount(unitID) or 0) == 0
     end
 
     return nil

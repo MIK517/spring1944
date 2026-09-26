@@ -13,7 +13,8 @@
 
 Spring.SendCommands({"ctrlpanel " .. LUAUI_DIRNAME .. "ctrlpanel.txt"})
 
-VFS.Include(LUAUI_DIRNAME .. "rml_setup.lua",  nil)--, VFS.ZIP)
+-- rml_setup.lua is not included: S:44 has no RmlUi interface, and the engine's
+-- stock copy loads Fonts/FreeMonoBold.ttf, which the engine does not ship.
 VFS.Include(LUAUI_DIRNAME .. 'utils.lua', nil)--, VFS.ZIP)
 
 include("setupdefs.lua")

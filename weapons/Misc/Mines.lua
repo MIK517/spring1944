@@ -39,8 +39,8 @@ local SatchelCharge = MineClass:New{
   areaOfEffect       = 104,
   edgeEffectiveness  = 1,
   name               = [[Satchel Charge]],
-    weaponcost    = -2,
   customparams = {
+    weaponcost         = -2,
     fearaoe            = 210,
     fearid             = 501,
   },

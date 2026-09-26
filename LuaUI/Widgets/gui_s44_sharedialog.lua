@@ -151,7 +151,7 @@ local function __ResBar(parent, y, h, color, res_name)
         padding = {0, 0, 0, 0},
         resizable = false,
         draggable = false,
-        TileImage = ":cl:empty.png",
+        TileImage = IMAGE_DIRNAME .. "empty.png",
     }
     -- Create the icon at the left
     h = floor(0.9 * container.height)
@@ -207,9 +207,9 @@ local function __ResBar(parent, y, h, color, res_name)
         y = "0%",
         width = "100%",
         height = "150%",
-        TileImage = ":cl:empty.png",
-        StepImage  = ":cl:empty.png",
-        ThumbImage = ":cl:empty.png",
+        TileImage = IMAGE_DIRNAME .. "empty.png",
+        StepImage  = IMAGE_DIRNAME .. "empty.png",
+        ThumbImage = IMAGE_DIRNAME .. "empty.png",
         value = 0,
         OnChange = {}
     }
@@ -238,7 +238,6 @@ local function setupPlayers(playerID)
             local button = __playerButton(name, teamColors[name])
             button.teamId = teamId
             buttons_players[name] = button
-            main_players:AddChild(button)
         else
             
         end

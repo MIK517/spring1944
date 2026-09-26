@@ -17,7 +17,7 @@ end
 
 -- Localisations
 -- Synced Read
-local GetCommandQueue      = Spring.GetCommandQueue
+local GetUnitCommands      = Spring.GetUnitCommands
 local GetUnitBasePosition  = Spring.GetUnitBasePosition
 local GetUnitBuildFacing   = Spring.GetUnitBuildFacing
 local GetUnitStates        = Spring.GetUnitStates
@@ -105,7 +105,7 @@ local function CreateSquad(unitID, unitDefID, teamID, builderID)
 	-- Get the orders for the squad spawner
 	local unitHeading = 0
 	local states = nil
-	local queue = GetCommandQueue(unitID, -1)
+	local queue = GetUnitCommands(unitID, -1)
 
 	if builderID then
 		unitHeading = GetUnitBuildFacing(builderID)

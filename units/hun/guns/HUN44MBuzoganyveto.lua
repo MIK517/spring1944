@@ -6,6 +6,7 @@ local HUN_44M_HeavyAT_Truck = ATGunTractor:New{
 	customParams = {
 		maxammo		= 2,
 		normaltex			= "unittextures/HUN44MBuzoganyveto_normals.png",
+		turretturnspeed		= 24, -- lus_helper default
 	},
 	weapons = {
 		[1] = { -- AP

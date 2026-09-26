@@ -315,7 +315,7 @@ local iconTypes = {
         distance = 0.3,
     },
     turret = {
-        --bitmap   = "icons/alert.tga",
+        bitmap   = "icons/alert.tga", -- never drawn (size 0); the engine wants a valid bitmap
         size     = 0, -- should be invisible!
         distance = 0.3,
     },

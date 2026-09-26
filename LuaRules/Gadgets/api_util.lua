@@ -21,7 +21,7 @@ local SetUnitHealth = Spring.SetUnitHealth
 local GetUnitExperience = Spring.GetUnitExperience
 local SetUnitExperience = Spring.SetUnitExperience
 local GetUnitStates = Spring.GetUnitStates
-local GetCommandQueue = Spring.GetCommandQueue
+local GetUnitCommands = Spring.GetUnitCommands
 local GiveOrderToUnit = Spring.GiveOrderToUnit
 
 local CMD_FIRE_STATE = CMD.FIRE_STATE
@@ -53,7 +53,7 @@ local function ReplaceUnit(unitID, newUnitDef, teamID)
   GiveOrderToUnit(newUnitID, CMD_FIRE_STATE, { states.firestate }, 0)
   GiveOrderToUnit(newUnitID, CMD_MOVE_STATE, { states.movestate }, 0)
   
-  local commandQueue = GetCommandQueue(unitID, -1)
+  local commandQueue = GetUnitCommands(unitID, -1)
   for i = 1, #commandQueue do
     local command = commandQueue[i]
     local commandOptions = command.options

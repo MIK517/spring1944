@@ -10,7 +10,6 @@ local FlamerClass = Weapon:New{
 	explosionSpeed     = 0.01,
 	fireStarter        = 100,
 	groundbounce       = false,
-	id                 = 76, -- needed?
 	impulseFactor      = 1e-06,
 	reloadtime         = 2,
 	size               = 0.01,

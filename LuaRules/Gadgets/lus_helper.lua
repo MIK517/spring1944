@@ -24,7 +24,7 @@ local GetUnitPiecePosDir	= Spring.GetUnitPiecePosDir
 local GetUnitPosition		= Spring.GetUnitPosition
 local GetUnitWeaponTarget	= Spring.GetUnitWeaponTarget
 local GetUnitRulesParam		= Spring.GetUnitRulesParam
-local GetCommandQueue		= Spring.GetCommandQueue
+local GetUnitCommands		= Spring.GetUnitCommands
 -- Synced Ctrl
 local PlaySoundFile			= Spring.PlaySoundFile
 local SpawnCEG				= Spring.SpawnCEG
@@ -291,7 +291,7 @@ function GG.ApplySpeedChanges(unitID)
 	end
 
 	if currentSpeed ~= newSpeed then
-		local cmds = GetCommandQueue(unitID, 2)
+		local cmds = GetUnitCommands(unitID, 2)
 		--if #cmds >= 2 then
 		if #cmds >= 1 then
 			if cmds[1].id == CMD.MOVE or cmds[1].id == CMD.FIGHT or cmds[1].id == CMD.ATTACK then

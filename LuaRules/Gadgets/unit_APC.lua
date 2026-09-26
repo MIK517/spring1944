@@ -15,7 +15,7 @@ if gadgetHandler:IsSyncedCode() then
 local GetUnitCommands    = Spring.GetUnitCommands
 local GetUnitsInCylinder = Spring.GetUnitsInCylinder
 local GetUnitPosition    = Spring.GetUnitPosition
-local GetUnitCommands    = Spring.GetUnitCommands
+local GetUnitCommandCount = Spring.GetUnitCommandCount
 local GetUnitDefID       = Spring.GetUnitDefID
 local GetGroundHeight    = Spring.GetGroundHeight
 local GiveOrderToUnit    = Spring.GiveOrderToUnit
@@ -154,7 +154,7 @@ function gadget:GameFrame(n)
     local maxTransportMass = APCUnitDefs[APCUnits[APCLastUnit].unitDefID].transportMass
     local minTransportMass = state == 2 and 100 or 0
     local unitID = APCUnits[APCLastUnit].unitID
-    if (GetUnitCommands(unitID, 0) or 0) > 0 then
+    if (GetUnitCommandCount(unitID) or 0) > 0 then
         -- The APC is still busy
         return;
     end

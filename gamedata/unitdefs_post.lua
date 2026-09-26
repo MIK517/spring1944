@@ -403,3 +403,21 @@ table.sort(GMBuildOptions)
 GM_UD["buildoptions"] = GMBuildOptions
 
 VFS.Include("gamedata/unitdefs_post_dependency.lua")
+
+-- Units that cost nothing (flags, mines, spawner and morph dummies...) have zero
+-- "power", which the engine warns about and clamps to 0.001. Set that value here:
+-- same result, no warning.
+local MIN_POWER = 0.001
+for _, ud in pairs(UnitDefs) do
+	local lk = {}
+	for key, value in pairs(ud) do
+		if type(key) == "string" then lk[key:lower()] = value end
+	end
+	if lk.power == nil then
+		local metal  = tonumber(lk.metalcost or lk.buildcostmetal) or 0
+		local energy = tonumber(lk.energycost or lk.buildcostenergy) or 0
+		if metal + energy / 60 < MIN_POWER then
+			ud.power = MIN_POWER
+		end
+	end
+end

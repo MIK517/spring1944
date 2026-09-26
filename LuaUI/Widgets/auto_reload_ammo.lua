@@ -57,6 +57,7 @@ local GetAllUnits               = Spring.GetAllUnits
 local GetUnitRulesParam         = Spring.GetUnitRulesParam
 local GiveOrderToUnit           = Spring.GiveOrderToUnit
 local GetUnitCommands           = Spring.GetUnitCommands
+local GetUnitCommandCount       = Spring.GetUnitCommandCount
 local GetUnitLastAttacker       = Spring.GetUnitLastAttacker 
 local GetUnitHealth				= Spring.GetUnitHealth
 local GetTeamRulesParam			= Spring.GetTeamRulesParam
@@ -150,7 +151,7 @@ function checkAmmo()
             --Echo("in UNIT_RETURNING_TO_SUPPLY", v.uID) 
             --while in the process of returning for resupply we could be ordered to do something else so keep checking
             --the order queue then get back for resupply   
-            commands = GetUnitCommands(v.uID, 0)
+            commands = GetUnitCommandCount(v.uID)
             if (commands ~= nil) then  
                 if (commands >=2) then            
                     v.unitSupplyState = v.UNIT_SOPS            

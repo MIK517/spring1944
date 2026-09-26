@@ -54,7 +54,6 @@ local OpticClass = Weapon:New{
 	collisionSize      = 0.000001,
 	edgeEffectiveness  = 0,
 	explosionGenerator = [[custom:nothing]],
-	id                 = 999, -- not sure this is used anywhere?
 	noSelfDamage       = true,
 	reloadtime         = 2,
 	size               = 1e-10,

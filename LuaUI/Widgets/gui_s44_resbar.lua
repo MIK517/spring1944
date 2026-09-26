@@ -112,7 +112,7 @@ local function ResBar(parent, x, color, res_name)
         padding = {0, 0, 0, 0},
         resizable = false,
         draggable = false,
-        TileImage = ":cl:empty.png",
+        TileImage = LUAUI_DIRNAME .. "Images/ComWin/empty.png",
     }
     -- Create the icon at the left
     h = floor(0.9 * min(container.height, 0.15 * container.width))
@@ -160,8 +160,8 @@ local function ResBar(parent, x, color, res_name)
         y = "0%",
         width = "100%",
         height = "150%",
-        TileImage = ":cl:empty.png",
-        StepImage  = ":cl:empty.png",
+        TileImage = LUAUI_DIRNAME .. "Images/ComWin/empty.png",
+        StepImage  = LUAUI_DIRNAME .. "Images/ComWin/empty.png",
         ThumbImage = IMAGE_DIRNAME .. "share_thumb.png",
         OnChange = {}
     }

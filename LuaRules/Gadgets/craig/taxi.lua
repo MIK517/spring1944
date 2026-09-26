@@ -26,6 +26,7 @@ local CMD_GUARD = CMD.GUARD
 local random, min, max = math.random, math.min, math.max
 local GetUnitDefID       = Spring.GetUnitDefID
 local GetUnitCommands    = Spring.GetUnitCommands
+local GetUnitCommandCount = Spring.GetUnitCommandCount
 local GetTeamResources   = Spring.GetTeamResources
 local GetUnitIsDead      = Spring.GetUnitIsDead
 local GetUnitRulesParam  = Spring.GetUnitRulesParam
@@ -252,7 +253,7 @@ function TaxiService.GameFrame(f)
 
     -- Traverse the units looking for those who are free
     for u, mission in pairs(busyUnits) do
-        if (GetUnitCommands(u, 0) or 0) == 0 then
+        if (GetUnitCommandCount(u) or 0) == 0 then
             finished_mission(u)
         end
         if mission.cmd == CMD_GUARD then

@@ -8,7 +8,6 @@ local GrenadeClass = Weapon:New{
 	canAttackGround    = false,
 	explosionSpeed     = 30,
 	groundBounce       = true,
-	id                 = 31, -- used?
 	impulseFactor      = 1e-05,
 	model              = "MortarShell.S3O",
 	targetBorder       = 1,

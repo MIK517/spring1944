@@ -35,7 +35,7 @@ local CMD_REMOVE    = CMD.REMOVE
 local CMD_SET_WANTED_MAX_SPEED = CMD.SET_WANTED_MAX_SPEED or 1002  -- See LuaRules/Gadgets/unit_customformations2.lua
 
 local spDiffTimers           = Spring.DiffTimers
-local spGetCommandQueue      = Spring.GetCommandQueue
+local spGetUnitCommands      = Spring.GetUnitCommands
 local spGetConfigInt         = Spring.GetConfigInt
 local spGetInvertQueueKey    = Spring.GetInvertQueueKey
 local spGetModKeyState       = Spring.GetModKeyState
@@ -77,7 +77,7 @@ end
 
 
 local function RemoveMove(unitID)
-  local queue = spGetCommandQueue(unitID, -1)
+  local queue = spGetUnitCommands(unitID, -1)
   local qLast = #queue
   if (qLast < 1) then
     return false
