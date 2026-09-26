@@ -937,7 +937,8 @@ if UnitDef.customParams.canclearmines then
 	end
 
 	function StopClearMines()
-		if CanAim("engineer") then
+		-- also cancel a pose that is still being raised, not only a finished one
+		if wantedAiming == "engineer" then
 			StopAiming()
 		end
 	end

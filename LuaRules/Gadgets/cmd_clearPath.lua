@@ -27,6 +27,8 @@ local GetFeaturesInCylinder	= Spring.GetFeaturesInCylinder
 local GetFeatureBlocking	= Spring.GetFeatureBlocking
 local ValidUnitID		= Spring.ValidUnitID
 local GetGroundHeight		= Spring.GetGroundHeight
+local GetUnitCommandCount	= Spring.GetUnitCommandCount
+local GetUnitCurrentCommand	= Spring.GetUnitCurrentCommand
 
 
 -- Synced Ctrl
@@ -43,6 +45,7 @@ local STOP_DIST = 5
 local MIN_DIST = 20
 local WAYPOINT_DIST = 100
 local MINE_CLEAR_TIME = 3000 -- time in ms to clear single mine
+local ORPHAN_CHECK_FRAMES = 15 -- how often to look for clearers whose order is gone
 local gMaxUnits = Game.maxUnits
 -- Variables
 local clearers = {} -- clearers[ownerID] = {target={x,y,z},waypoint={wx,wy,wz},delta={dx,dz}, new, active, on_waypoint, done}
@@ -63,6 +66,23 @@ local clearPathDesc = {
 
 
 -- Callins
+
+local function StopClearPose(unitID)
+	local stopClear = stopClearCache[unitID]
+	if stopClear then
+		Spring.UnitScript.CallAsUnit(unitID, stopClear)
+	end
+end
+
+local function HasClearPathCommand(unitID)
+	local count = GetUnitCommandCount(unitID) or 0
+	for i = 1, count do
+		if GetUnitCurrentCommand(unitID, i) == CMD_CLEARPATH then
+			return true
+		end
+	end
+	return false
+end
 
 local function BlowMine(engineerID)
 	local clearer = clearers[engineerID]
@@ -115,6 +135,9 @@ local function ClearWaypoint(unitID, x, z)
 		clearers[unitID].active = Spring.UnitScript.CallAsUnit(unitID, startClearCache[unitID], BlowMine, MINE_CLEAR_TIME)
 		return false
 	end
+
+	-- the mines may have been cleared by someone else while the pose was being raised
+	StopClearPose(unitID)
 	
 	local tmpNearbyFeatures = GetFeaturesInCylinder(x,z, OBSTACLE_CLEAR_RADIUS)
 	for _, featureID in pairs(tmpNearbyFeatures) do
@@ -223,6 +246,7 @@ function gadget:CommandFallback(unitID, unitDefID, teamID, cmdID, cmdParams, cmd
 			wz = z
 		else
 			clearers[unitID] = nil
+			StopClearPose(unitID)
 			return true, true
 		end
 		wy = GetGroundHeight(wx, wz)
@@ -274,6 +298,17 @@ end
 
 function gadget:GameFrame(n)
 	currentFrame = n
+	if n % ORPHAN_CHECK_FRAMES ~= 0 then
+		return
+	end
+	-- Drop clearers whose order was cancelled or replaced, and lower the pose.
+	-- A mine already being cleared (active) is left to finish, as before.
+	for unitID, clearer in pairs(clearers) do
+		if not clearer.active and not HasClearPathCommand(unitID) then
+			clearers[unitID] = nil
+			StopClearPose(unitID)
+		end
+	end
 end
 
 
