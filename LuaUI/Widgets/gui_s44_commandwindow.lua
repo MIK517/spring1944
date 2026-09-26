@@ -317,9 +317,16 @@ function ResizeContainers()
     -- Let's start rearraging each container.
     local cols, rows, n, buttonsize
     local h, scroll_rows = 0, {}
+    -- Never let cols reach 0. It used to, whenever the window was narrower than a
+    -- single full-size button, and then buttonsize became infinite, propagated into
+    -- every child position, and finally blew up inside Chili's font:Print -- which
+    -- Recoil 2026.07.04 rejects ("bad argument #3 to 'Print', got +-Inf"). Because
+    -- the throw happens mid-draw it also leaves the GL matrix stack unbalanced,
+    -- which takes the rest of the interface down with it.
+    local availWidth = max(main_win.clientWidth - 12, 1)
     for _, c in pairs(conts) do
-        cols = floor((main_win.clientWidth - 12) / (minbuttonsize * c.buttonsize_mult))
-        buttonsize = (main_win.clientWidth - 12) / cols
+        cols = max(1, floor(availWidth / (minbuttonsize * c.buttonsize_mult)))
+        buttonsize = availWidth / cols
         n = #(c.children)
         rows = floor(n / cols)
         if n % cols > 0 then
@@ -336,9 +343,11 @@ function ResizeContainers()
     -- Now analyze the better disposition of the containers, taking into account
     -- that they are wrapped in a scroll panel. To this end we are progressively
     -- hiding rows from bottom to top, granting at least one row per container
-    local H = main_win.clientHeight - 2
+    local H = max(main_win.clientHeight - 2, 1)
     local i = #conts
-    while (i >= 0) and (h > H) do
+    -- i >= 1, not i >= 0: conts[0] is nil, so the old bound could index a nil
+    -- container whenever the panels still did not fit after the first one.
+    while (i >= 1) and (h > H) do
         local c = conts[i]
         local extra_rows = ceil((h - H) / c.buttonsize)
         scroll_rows[i] = max(c.rows - extra_rows, 1)
@@ -463,7 +472,7 @@ function widget:Initialize()
         draggable = true,
         resizable = true,
         padding = {0, 0, 0, 0},
-        minWidth = buttonsize + 12 + 10,
+        minWidth = buttonsize + 12 + 24, -- room for one full-size button plus window chrome
         minHeight = (buttonsize + 24) * 4,
         force_show = true,
         caption = "Commands",

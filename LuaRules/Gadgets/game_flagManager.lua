@@ -267,7 +267,13 @@ function PlaceFlag(spot, flagType, unitID)
 end
 
 
-function gadget:Initialize()
+-- NB: this must NOT run from gadget:Initialize().
+-- Many Zero-K maps ship an empty metal map and paint their spots at runtime from a
+-- LuaGaia gadget (e.g. Absolution 2's dynamic_metal.lua), and the engine loads LuaGaia
+-- *after* LuaRules. Analysing the metal map during Initialize therefore saw a blank map,
+-- produced zero flag spots, and the match ran with no capture points at all.
+-- GamePreload runs after LuaGaia is up and before GameStart places the flags.
+local function DetermineFlagSpots()
 	if DEBUG then Spring.Echo(PROFILE_PATH) end
 	-- CHECK FOR PROFILES
 	if VFS.FileExists(PROFILE_PATH) then
@@ -294,8 +300,7 @@ function gadget:Initialize()
 		flagTypeSpots['buoy'] = generatedSpots['buoy']
 	end
 
-	-- populated by placeFlag
-	GG.flags = {}
+	-- adopt any flags the mapper pre-placed on a spot
 	for _, flagType in pairs(flagTypes) do
 		for i = 1, #flagTypeSpots[flagType] do
 			local sx, sz = flagTypeSpots[flagType][i].x, flagTypeSpots[flagType][i].z
@@ -309,12 +314,29 @@ function gadget:Initialize()
 			end
 		end
 	end
+end
+
+
+function gadget:Initialize()
+	-- populated by PlaceFlag
+	GG.flags = {}
+
+	-- Normally the spots are worked out in GamePreload (see DetermineFlagSpots above).
+	-- A mid-game reload of this gadget never gets a GamePreload, so handle that here.
+	if Spring.GetGameFrame() > 0 then
+		DetermineFlagSpots()
+	end
 
 	local allUnits = Spring.GetAllUnits()
 	for i=1,#allUnits do
 		local unitID = allUnits[i]
 		gadget:UnitCreated(unitID, GetUnitDefID(unitID))
 	end
+end
+
+
+function gadget:GamePreload()
+	DetermineFlagSpots()
 end
 
 

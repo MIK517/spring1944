@@ -26,10 +26,39 @@ local customizable_windows = {}
 local customizable_state = true
 
 
+-- Minimum the callers can still subtract 1 or 2 from and stay sane.
+local MIN_FONT_SIZE = 4
+
 function OptimumFontSize(font, txt, w, h)
-    local wf = w / font:GetTextWidth(txt)
-    local hf, _, _ = h / font:GetTextHeight(txt)
-    return floor(min(wf, hf) * font.size)
+    -- An empty (or whitespace-only) caption measures 0 wide, and the old code
+    -- divided by that: the result was an infinite font size, which propagated
+    -- into skinutils' DrawControl and blew up in font:Print. Recoil 2026.07.04
+    -- rejects non-finite arguments there, and since the throw happens mid-draw
+    -- it also unbalances the GL matrix stack, taking down every control drawn
+    -- afterwards -- which is why a single empty button caption could black out
+    -- most of the interface.
+    if (not txt) or (txt == "") then
+        return max(MIN_FONT_SIZE, font.size)
+    end
+
+    local tw = font:GetTextWidth(txt)
+    local th = font:GetTextHeight(txt)
+    local wf = (tw and tw > 0) and (w / tw) or nil
+    local hf = (th and th > 0) and (h / th) or nil
+
+    local factor
+    if wf and hf then
+        factor = min(wf, hf)
+    else
+        factor = wf or hf
+    end
+
+    -- no usable metric, or NaN from a degenerate w/h
+    if (not factor) or (factor ~= factor) then
+        return max(MIN_FONT_SIZE, font.size)
+    end
+
+    return max(MIN_FONT_SIZE, floor(factor * font.size))
 end
 
 function ToSI(num)

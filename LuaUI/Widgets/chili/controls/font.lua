@@ -250,8 +250,22 @@ end
 
 --// ============================================================================= 
 
+local INF = math.huge
+local function _IsFinite(n)
+	return (type(n) == "number") and (n == n) and (n ~= INF) and (n ~= -INF)
+end
+
 function Font:_DrawText(text, x, y, extra)
 	local font = self._font
+
+	-- Refuse to draw with non-finite geometry. Recoil 2026.07.04 raises on
+	-- infinite coordinates or sizes; because that happens between PushMatrix and
+	-- PopMatrix it leaves the GL matrix stack unbalanced, and everything drawn
+	-- after it in the same frame is lost too. Skipping one glyph run is a far
+	-- cheaper failure than losing the rest of the interface.
+	if not (_IsFinite(x) and _IsFinite(y) and _IsFinite(self.size)) then
+		return
+	end
 
 	gl.PushAttrib(GL.COLOR_BUFFER_BIT)
 	gl.PushMatrix()

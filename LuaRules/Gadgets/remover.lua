@@ -5,7 +5,19 @@ function gadget:GetInfo()
     author    = "ashdnazg",
     date      = "21 May 2015",
     license   = "GNU GPL, v2 or later",
-    layer     = -20000,
+    -- Deliberately near the TOP of the layer range, not the bottom.
+    -- The gadget handler sorts each callin list highest-layer-first and walks it
+    -- with a descending iterator seeded once from the original length. A gadget at
+    -- the lowest layer therefore sits at the highest index and runs first -- which
+    -- is fatal here, because removing entries below it shrinks the list while the
+    -- descending index does not, and the next read falls off the end as nil
+    -- ("gadgets.lua:877: attempt to index local 'g'" at frame 0, when
+    -- game_communismMode and game_spoilsofwar both drop out at once).
+    -- At the top of the range this gadget is at index 1 and runs last, so the
+    -- iterator terminates on its own before it can read again, no matter how many
+    -- gadgets were removed. This also runs the cleanup at the end of the frame the
+    -- removal was requested in, rather than at the start of the next one.
+    layer     = 20000,
     enabled   = true,  --  loaded by default?
 	handler   = true,
   }
@@ -38,6 +50,7 @@ dummy.GamePreload = retNil
 dummy.GameStart   = retNil
 dummy.GameOver    = retNil
 dummy.GameFrame   = retNil
+dummy.GameFramePost = retNil
 dummy.GameID      = retNil
 
 dummy.PlayerChanged = retNil
