@@ -187,7 +187,7 @@ local options = {
 		desc = "Enables debugging echoes",
 		type = "bool",
 		section = '4other',
-		def = true,
+		def = false,
 	},
 	
 	{

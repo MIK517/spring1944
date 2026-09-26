@@ -62,7 +62,8 @@ function widget:DefaultCommand(targetType, targetID)
     if targetType == "unit" and (Spring.GetUnitAllyTeam(targetID) ~= Spring.GetMyAllyTeamID()) then
         local targetDefID = Spring.GetUnitDefID(targetID)
         local targetDef = UnitDefs[targetDefID]
-        capturableTarget = targetDef.capturable and Spring.GetUnitNeutral(targetID)
+        -- radar blips have no visible unitDef
+        capturableTarget = targetDef and targetDef.capturable and Spring.GetUnitNeutral(targetID)
     end
 
     local cmd = false
@@ -73,7 +74,7 @@ function widget:DefaultCommand(targetType, targetID)
         end
 
         local unitDefCom = defCom[Spring.GetUnitDefID(u)]
-        if unitDefCGetDefaultCommandom and cmd == false then
+        if unitDefCom and cmd == false then
             cmd = unitDefCom
         elseif cmd ~= unitDefCom then
             cmd = nil

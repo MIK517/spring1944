@@ -31,7 +31,7 @@ local GetGroundHeight		= Spring.GetGroundHeight
 
 -- Synced Ctrl
 local DestroyUnit		= Spring.DestroyUnit
-local RemoveBuildingDecal	= Spring.RemoveBuildingDecal
+local RemoveObjectDecal	= Spring.RemoveObjectDecal
 local SetUnitMoveGoal		= Spring.SetUnitMoveGoal
 local SpawnCEG			= Spring.SpawnCEG
 local GiveOrderToUnit		= Spring.GiveOrderToUnit
@@ -65,15 +65,20 @@ local clearPathDesc = {
 -- Callins
 
 local function BlowMine(engineerID)
-	local mineID = clearers[engineerID].mineID
-	clearers[engineerID].active = false
-	if ValidUnitID(engineerID) and not clearers[engineerID].done then
-		Spring.UnitScript.CallAsUnit(unitID, stopClearCache[unitID])
-		if ValidUnitID(mineID) then -- only destroy mines if clearer is still alive
+	local clearer = clearers[engineerID]
+	if not clearer then -- engineer died or finished in the meantime
+		return
+	end
+	local mineID = clearer.mineID
+	clearer.mineID = nil -- the script callback and the backup timer both land here
+	clearer.active = false
+	if ValidUnitID(engineerID) and not clearer.done then
+		Spring.UnitScript.CallAsUnit(engineerID, stopClearCache[engineerID])
+		if mineID and ValidUnitID(mineID) then -- only destroy mines if clearer is still alive
 			local px, py, pz = GetUnitPosition(mineID)
 			DestroyUnit(mineID, false, true)
 			SpawnCEG("HE_Small", px, py, pz)
-			RemoveBuildingDecal(mineID)
+			RemoveObjectDecal(mineID)
 		end
 	end
 end
@@ -102,8 +107,10 @@ local function ClearWaypoint(unitID, x, z)
 
 	
 	if #mines > 0 then
-		GG.Delay.DelayCall(BlowMine, {mines[math.random(#mines)], unitID}, MINE_CLEAR_TIME * 30)
-		clearers[unitID].blowFrame = currentFrame + MINE_CLEAR_TIME
+		-- MINE_CLEAR_TIME is in ms; DelayCall and blowFrame count frames
+		local clearFrames = math.ceil(MINE_CLEAR_TIME * Game.gameSpeed / 1000)
+		GG.Delay.DelayCall(BlowMine, {unitID}, clearFrames)
+		clearers[unitID].blowFrame = currentFrame + clearFrames
 		clearers[unitID].mineID = mines[math.random(#mines)]
 		
 		clearers[unitID].active = Spring.UnitScript.CallAsUnit(unitID, startClearCache[unitID], BlowMine, MINE_CLEAR_TIME)

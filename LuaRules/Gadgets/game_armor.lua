@@ -74,6 +74,10 @@ local unitInfos = {}
 --armor_dropoff is in inverse elmos (exponential penetration decay)
 local weaponInfos = {}
 
+-- "Sloped Armour Debugger" modoption: per-hit and end-of-game hit echoes
+local DEBUG_ECHO = (Spring.GetModOptions() or {}).sloped_armour_debug
+DEBUG_ECHO = (DEBUG_ECHO == "1") or (DEBUG_ECHO == 1) or (DEBUG_ECHO == true) or (DEBUG_ECHO == "true")
+
 -- counters for piece hits
 local hitCounts = {} -- ["base"] = number, etc
 local hits = {} -- unitdefID = {base, turret, super}
@@ -301,7 +305,7 @@ local function ResolveDamage(targetID, targetDefID, pieceHit, projectileID, weap
 		if dx then -- we can end up here if there was no projectile?
 			armor = GG.Vector.EffectiveThickness(armor, dx,dy,dz, fx,fy,fz)
 			local dotActual = vDotProduct(dx,dy,dz, fx,fy,fz)
-			if false then--(not modOptions) or (modOptions and modOptions.sloped_armour_debug == "1") then
+			if DEBUG_ECHO then
 				Spring.Echo(pieceHit .. " (" .. armor_hit_side .. ") actual armour is " .. armorPre .. "mm @ " .. slope .. "°" ..
 							". Effective armour is " .. string.format("%3d",armor) .. "mm @ " .. string.format("%3d",math.deg(math.acos(dotActual))) .. "°" ..
 							" (Pen: " .. string.format("%3d",penetration) .."mm)")
@@ -383,6 +387,9 @@ function gadget:ProjectileCreated(projectileID, ownerID, weaponID)
 end
 
 function gadget:GameOver()
+	if not DEBUG_ECHO then
+		return
+	end
 	--Spring.Echo("GameOver was actually called for once!")
 	for piece, count in pairs(hitCounts) do
 		Spring.Echo(piece .. " hits: " .. count)
@@ -401,6 +408,8 @@ end
 
 --function gadget:UnitDestroyed()
 function gadget:TeamDied()
-	Spring.Echo("TeamDied")
-	gadget:GameOver()
+	if DEBUG_ECHO then
+		Spring.Echo("TeamDied")
+		gadget:GameOver()
+	end
 end

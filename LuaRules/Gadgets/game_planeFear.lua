@@ -126,7 +126,10 @@ function gadget:GameFrame(n)
 					local newFuel = fuel - FUEL_LOSS_RATE
 					local oldAccuracy = GetUnitWeaponState(unitID, 1, "accuracy")
 					if oldAccuracy ~= nil then
-						SetUnitWeaponState(unitID, 1, {accuracy = oldAccuracy*2*fear})
+						-- scale from the unscared accuracy; compounding the current value
+						-- every 15 frames overflowed to inf on long-scared planes
+						local baseAccuracy = accuracyTable[unitID] or oldAccuracy
+						SetUnitWeaponState(unitID, 1, {accuracy = baseAccuracy*2*fear})
 						SetUnitRulesParam(unitID, "fuel", math.max(newFuel, 0))
 						if fear > BUGOUT_LEVEL then
 							local px, py, pz = unpack(teamStartPos[teamID])
