@@ -201,11 +201,11 @@ local options = {
 
 	{
 		key = "qtpfs",
-		name = "QTPFS",
-		desc = "Switch between Legacy or QTPFS pathfinder",
+		name = "Use QTPFS pathfinder",
+		desc = "On (default): QTPFS, the quad-tree pathfinder Zero-K and BAR use. In testing on this game it ran faster on both open and maze-like maps, and its units made more progress toward their orders. Off: HAPFS, the engine's older hierarchical pathfinder. (key = 'qtpfs')",
 		type = "bool",
 		section = '4other',
-		def = false,
+		def = true,
 	},
 	
 	{
