@@ -75,10 +75,13 @@ function script.TransportPickup(passengerID, skip)
 			Move(arm, z_axis, 0)
 		end
 	end
-	numPassengers = numPassengers + 1
-	passengers[numPassengers] = passengerID
-	Spring.UnitScript.AttachUnit(attachPoints[numPassengers], passengerID)
-	Spring.SetUnitNoMinimap(passengerID, true)
+	Spring.UnitScript.AttachUnit(attachPoints[numPassengers + 1], passengerID)
+	-- only keep track of passengers the engine actually let us load
+	if Spring.GetUnitTransporter(passengerID) == unitID then
+		numPassengers = numPassengers + 1
+		passengers[numPassengers] = passengerID
+		Spring.SetUnitNoMinimap(passengerID, true)
+	end
 	--Spring.Echo("TransportPickup", numPassengers, "ID", passengerID, info.rampLength)
 	SetUnitValue(COB.BUSY, 0)
 	Spring.MoveCtrl.Disable(unitID)

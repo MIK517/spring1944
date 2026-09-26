@@ -21,6 +21,7 @@ local GetUnitCommands      = Spring.GetUnitCommands
 local GetUnitBasePosition  = Spring.GetUnitBasePosition
 local GetUnitBuildFacing   = Spring.GetUnitBuildFacing
 local GetUnitStates        = Spring.GetUnitStates
+local GetUnitTransporter   = Spring.GetUnitTransporter
 -- Synced Ctrl
 local CreateUnit           = Spring.CreateUnit
 local DestroyUnit          = Spring.DestroyUnit
@@ -148,6 +149,14 @@ local function SpawnTransportSquad(unitID, teamID, transportSquad)
 				Spring.UnitScript.CallAsUnit(unitID, env.script.TransportPickup, passID, true)
 			else
 				Spring.CallCOBScript(unitID, "TransportPickup", 0, passID, 1)
+			end
+			-- A passenger the transport cannot take (too big, too heavy, full)
+			-- would be left standing under it, usually underwater and inside
+			-- the yard, so remove it instead.
+			if GetUnitTransporter(passID) ~= unitID then
+				Spring.Log('squad spawner', 'warning', "'" .. passengerDefName .. "' of squad '" .. transportSquad
+					.. "' could not be loaded into '" .. UnitDefs[Spring.GetUnitDefID(unitID)].name .. "', removing it")
+				DestroyUnit(passID, false, true)
 			end
 		end
 	end

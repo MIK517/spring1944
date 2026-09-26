@@ -310,6 +310,10 @@ if canTransport then
 		local attachPiece = GetPieceForPassenger(passengerID, mass)
 
 		AttachUnit(attachPiece, passengerID)
+		-- only keep track of passengers the engine actually let us load
+		if Spring.GetUnitTransporter(passengerID) ~= unitID then
+			return
+		end
 		cargoAttachList[attachPiece] = passengerID
 		cargoList[passengerID] = attachPiece
 		SetUnitNoSelect(passengerID, true)
