@@ -268,6 +268,22 @@ local options = {
 		type = 'section',
 	},
 	{
+		key = "set_ai_spawns",
+		name = "Set A.I. Start Positions",
+		desc = "Lets players place the start positions of A.I. teams before the match. Off: every A.I. is placed automatically on a start point of its ally's start box. On: players may move the A.I.s on their own allyteam, and the host may move any A.I. (key = 'set_ai_spawns')",
+		type = "bool",
+		section = "5ai",
+		def = false,
+	},
+	{
+		key = "set_ai_factions",
+		name = "Set A.I. Nations",
+		desc = "Lets players choose the nation each A.I. team fights as. Off: every A.I. is given a random nation drawn from its allyteam's side of the war. On: players may set the A.I.s on their own allyteam, and the host may set any A.I. (key = 'set_ai_factions')",
+		type = "bool",
+		section = "5ai",
+		def = false,
+	},
+	{
 		key = "craig_difficulty",
 		name = "C.R.A.I.G. difficulty level",
 		desc = "Sets the difficulty level of the C.R.A.I.G. bot. (key = 'craig_difficulty')",
