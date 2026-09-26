@@ -58,6 +58,11 @@ local spGetAllUnits = Spring.GetAllUnits
 local spValidUnitID = Spring.ValidUnitID
 local spGetUnitPosition = Spring.GetUnitPosition
 local spGetWindowGeometry = Spring.GetWindowGeometry
+local spGetGameFrame = Spring.GetGameFrame
+
+-- Reading the gradient back into Lua builds a table per texel, so only do it
+-- this often (game frames). The GPU gradient is still updated every pass.
+local READBACK_INTERVAL = 30
 
 local min, max = math.min, math.max
 local floor = math.floor
@@ -225,7 +230,7 @@ function HeatMap:Destroy()
     glDeleteFBO(self.grad_fbo)
 end
 
-function HeatMap:SwapBuffer()
+function HeatMap:SwapBuffer(frame)
     local grad_value
     local sx, sy = self.sx, self.sy
 
@@ -242,10 +247,14 @@ function HeatMap:SwapBuffer()
 
     glFlush()
 
-    glActiveFBO(self.grad_fbo, GL_READ_FRAMEBUFFER_EXT, function()
-        grad_value = glReadPixels(0, 0, sx, sy)
-    end)
-    self.grad_value = grad_value
+    if (self.grad_value == nil) or (frame == nil) or
+       (frame - self.grad_frame >= READBACK_INTERVAL) then
+        glActiveFBO(self.grad_fbo, GL_READ_FRAMEBUFFER_EXT, function()
+            grad_value = glReadPixels(0, 0, sx, sy)
+        end)
+        self.grad_value = grad_value
+        self.grad_frame = frame or 0
+    end
 
     -- Swap the active texture
     self.active_texture = (self.active_texture == 1) and 2 or 1
@@ -321,6 +330,8 @@ function HeatmapManager:Create(units_per_timestep)
     manager.current_unit = 1
     manager.heatmaps = {}
     manager.callbacks = {}
+    manager.heat_objs = {}  -- reused between updates, one list per heatmap
+    manager.units = nil     -- unit list of the current pass
     return manager
 end
 
@@ -337,6 +348,10 @@ end
 -- in world space units
 -- tilesize is optional (256 by default)
 function HeatmapManager:AddHeatmap(name, callback, tilesize)
+    if self.heatmaps[name] then
+        -- An allied AI already registered it; it would produce the same map
+        return
+    end
     self.heatmaps[name] = HeatMap:Create(tilesize)
     self.callbacks[name] = callback
 
@@ -355,7 +370,7 @@ end
 
 function HeatmapManager:__ParseUnit(unitID, out_obj)
     local x, y, z = spGetUnitPosition(unitID)
-    x_norm, y_norm = world2tex(x, z)
+    local x_norm, y_norm = world2tex(x, z)
     for name, f in pairs(self.callbacks) do
         local new_objs = f(unitID)
         for _, new_obj in ipairs(new_objs) do
@@ -368,15 +383,26 @@ function HeatmapManager:__ParseUnit(unitID, out_obj)
     end
 end
 
-function HeatmapManager:Update()
-    -- Parse the queried units
-    local units = spGetAllUnits()
+function HeatmapManager:Update(frame)
+    -- Take the unit list once per pass; units created meanwhile join the
+    -- next pass, and dead ones are skipped below
+    if self.current_unit == 1 or self.units == nil then
+        self.units = spGetAllUnits()
+    end
+    local units = self.units
 
     local first_unit = self.current_unit
     local last_unit = math.min(first_unit + self.units_per_timestep - 1, #units)
-    local heat_objs = {}
+    local heat_objs = self.heat_objs
     for name, _ in pairs(self.heatmaps) do
-        heat_objs[name] = {}
+        local objs = heat_objs[name]
+        if objs == nil then
+            heat_objs[name] = {}
+        else
+            for i = #objs, 1, -1 do
+                objs[i] = nil
+            end
+        end
     end
     for i = first_unit, last_unit do
         local unitID = units[i]
@@ -395,7 +421,7 @@ function HeatmapManager:Update()
     if self.current_unit > #units then
         self.current_unit = 1
         for _, heatmap in pairs(self.heatmaps) do
-            heatmap:SwapBuffer()
+            heatmap:SwapBuffer(frame)
         end
     end
 end
@@ -418,8 +444,18 @@ function gadget:Update()
     -- heatmaps_manager:Update()
 end
 
+-- The GL work has to happen in a draw call-in, but the data only changes with
+-- the simulation: step at most once per game frame, and not at all while
+-- paused.
+local lastUpdateFrame = nil
+
 function gadget:DrawGenesis()
-    heatmaps_manager:Update()
+    local frame = spGetGameFrame()
+    if frame == lastUpdateFrame then
+        return
+    end
+    lastUpdateFrame = frame
+    heatmaps_manager:Update(frame)
 end
 
 function gadget:DrawScreen()
