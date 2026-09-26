@@ -1912,7 +1912,7 @@ end
 
 function widgetHandler:UnitCommand(
 	unitID, unitDefID, unitTeam,
-	cmdId, cmdParams, cmdOpts, cmdTag,
+	cmdID, cmdParams, cmdOpts, cmdTag,
 	playerID, fromSynced, fromLua
 )
   for _,w in ipairs(self.UnitCommandList) do
