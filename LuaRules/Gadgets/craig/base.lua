@@ -701,31 +701,33 @@ function BaseMgr.GameFrame(f)
             Log("Below the unit cap, resuming production")
         end
     end
-    if productionPaused then
-        return
-    end
+    -- While paused only new production stops (building chains and factory
+    -- orders). Deploying packed guns and factories, which just morphs units
+    -- already counted, and the stall handling below keep running.
+    if not productionPaused then
+        -- Check if the building chain is not progressing, so we must move to a
+        -- new one
+        if not currentBuildID and selected_chain and selected_chain.start_time then
+            if GetGameSeconds() - selected_chain.start_time > CHAIN_GIVING_UP_TIME then
+                selected_chain = nil
+            end
+        end
 
-    -- Check if the building chain is not progressing, so we must move to a new
-    -- one
-    if not currentBuildID and selected_chain and selected_chain.start_time then
-        if GetGameSeconds() - selected_chain.start_time > CHAIN_GIVING_UP_TIME then
-            selected_chain = nil
+        if selected_chain == nil then
+            selected_chain = SelectNewBuildingChain()
+            if selected_chain then
+                Log("Starting a new chain to reach " .. selected_chain.units[#selected_chain.units])
+                selected_chain.retry = 3
+                StartChain()
+            else
+                Log("No way I can build nothing new!!!")
+            end
+            return
         end
     end
 
-    if selected_chain == nil then
-        selected_chain = SelectNewBuildingChain()
-        if selected_chain then
-            Log("Starting a new chain to reach " .. selected_chain.units[#selected_chain.units])
-            selected_chain.retry = 3
-            StartChain()
-        else
-            Log("No way I can build nothing new!!!")
-        end
-        return
-    end
-
-    if currentBuildDefID and isBuilderIdle(currentBuilder) then
+    -- (selected_chain can be nil here only while production is paused)
+    if currentBuildDefID and selected_chain and isBuilderIdle(currentBuilder) then
         Log(UnitDefs[currentBuildDefID].humanName, " was finished/aborted, but neither UnitFinished nor UnitDestroyed was called")
         BuildBaseInterrupted()
     end
@@ -741,7 +743,7 @@ function BaseMgr.GameFrame(f)
     end
     for u,q in pairs(myFactories) do
         checkFactoryWaitingState(u, is_waiting[u] == true)
-        if #q == 0 then
+        if #q == 0 and not productionPaused then
             Log("Factory " .. UnitDefs[GetUnitDefID(u)].name .. " hanged...")
             IdleFactory(u)
         end
