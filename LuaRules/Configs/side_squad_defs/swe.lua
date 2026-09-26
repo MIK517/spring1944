@@ -146,7 +146,7 @@ local sweDefs = {
 		members = {
 			"sweobserv",
 			"sweobserv",
-			"swemg",
+			"swekgm37",
 			"swekgm37",
 			"swekgm37",
 			"swekgm37",
