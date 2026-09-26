@@ -163,7 +163,7 @@ local function ProcessUnit(unitID, teamID, reload, stalling)
 	if ValidUnitID(unitID) then
 		-- Stalling. (stall penalty!)
 		if (stalling) then
-			SetUnitWeaponState(unitID, 1, {reloadTime = STALL_PENALTY*reload})
+			SetUnitWeaponState(unitID, 1, "reloadTime", STALL_PENALTY*reload)
 		end
 		-- In supply radius. (supply bonus!)
 		-- First check own team
@@ -184,12 +184,12 @@ local function ProcessUnit(unitID, teamID, reload, stalling)
 				return
 			end
 			Spring.SetUnitRulesParam(unitID, "insupply", 1)
-			SetUnitWeaponState(unitID, 1, {reloadTime = SUPPLY_BONUS*reload})
+			SetUnitWeaponState(unitID, 1, "reloadTime", SUPPLY_BONUS*reload)
 			return
 		elseif not stalling then
 			Spring.SetUnitRulesParam(unitID, "insupply", 0)
 			-- reset reload time otherwise
-			SetUnitWeaponState(unitID, 1, {reloadTime = reload})
+			SetUnitWeaponState(unitID, 1, "reloadTime", reload)
 		end
 		-- Use resources if outside of supply
 		--[[if (reloadFrame > savedFrame[unitID]) then

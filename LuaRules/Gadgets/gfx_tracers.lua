@@ -62,6 +62,7 @@ local SendMessageToTeam		= Spring.SendMessageToTeam
 
 -- Variables
 local unitWeaponRounds = {}
+local tracerFreq = {} -- weaponDefID -> tracer frequency (customParams build a new table per access)
 
 function gadget:UnitDestroyed(unitID, unitDefID, unitTeam)
   unitWeaponRounds[unitID] = nil
@@ -73,7 +74,12 @@ function gadget:ProjectileCreated(proID, proOwnerID, weaponDefID)
       unitWeaponRounds[proOwnerID] = {}
     end
     unitWeaponRounds[proOwnerID][weaponDefID] = (unitWeaponRounds[proOwnerID][weaponDefID] or 0) + 1
-    if unitWeaponRounds[proOwnerID][weaponDefID] == (tonumber(WeaponDefs[weaponDefID].customParams.tracerfreq or 5)) then --customparam this later too
+    local freq = tracerFreq[weaponDefID]
+    if freq == nil then
+      freq = tonumber(WeaponDefs[weaponDefID].customParams.tracerfreq or 5)
+      tracerFreq[weaponDefID] = freq
+    end
+    if unitWeaponRounds[proOwnerID][weaponDefID] == freq then --customparam this later too
       unitWeaponRounds[proOwnerID][weaponDefID] = 0
       --TODO: batch sending if required
       SendToUnsynced("lupsProjectiles_AddProjectile", proID, proOwnerID, weaponDefID)

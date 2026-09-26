@@ -25,21 +25,38 @@ function gadget:UnitDestroyed(unitID)
 	immobilizedUnits[unitID] = nil
 end
 
+-- WeaponDefs[] / UnitDefs[].customParams build a new table on every access,
+-- and UnitDamaged runs for every hit on every unit: cache per def
+local weaponImmobChance = {}  -- weaponDefID -> customParams value | false
+local unitImmobResistance = {} -- unitDefID -> customParams value | false
+
 function gadget:UnitDamaged(unitID, unitDefID, unitTeam, damage, paralyzer, weaponDefID, projectileID, attackerID, attackerDefID, attackerTeam)
 	if GetUnitIsDead(unitID) then
 		return
 	end
-	local wd = WeaponDefs[weaponDefID]
-	if not wd then
+	if not weaponDefID then
 		return
 	end
-	local cp = wd.customParams
-	if cp and cp.immobilizationchance and tonumber(cp.immobilizationchance) > 0 then
+	local chance = weaponImmobChance[weaponDefID]
+	if chance == nil then
+		chance = false
+		local wd = WeaponDefs[weaponDefID]
+		local cp = wd and wd.customParams
+		if cp and cp.immobilizationchance and tonumber(cp.immobilizationchance) > 0 then
+			chance = cp.immobilizationchance
+		end
+		weaponImmobChance[weaponDefID] = chance
+	end
+	if chance then
 		-- get target unit resistance. If none then this unit can't be immobilized
-		local ud = UnitDefs[unitDefID]
-		local ucp = ud.customParams
-		if ucp and ucp.immobilizationresistance then
-			local finalResistance = cp.immobilizationchance * (1 - ucp.immobilizationresistance)
+		local resistance = unitImmobResistance[unitDefID]
+		if resistance == nil then
+			local ucp = UnitDefs[unitDefID].customParams
+			resistance = (ucp and ucp.immobilizationresistance) or false
+			unitImmobResistance[unitDefID] = resistance
+		end
+		if resistance then
+			local finalResistance = chance * (1 - resistance)
 			local randomRoll = random(1000)
 			--Spring.Echo('roll: ' .. randomRoll .. ' vs ' .. (finalResistance * 1000))
 			if randomRoll < finalResistance * 1000 then

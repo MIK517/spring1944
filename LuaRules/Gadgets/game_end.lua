@@ -197,9 +197,20 @@ local function DestroyAlliance(allianceID)
 end
 GG.DestroyAlliance = DestroyAlliance
 
+-- UnitDefs[].customParams builds a new table on every access
+local dontCountCache = {} -- unitDefID -> boolean
+local function DontCount(unitDefID)
+    local v = dontCountCache[unitDefID]
+    if v == nil then
+        local cp = UnitDefs[unitDefID].customParams
+        v = (cp and cp.dontcount == "1") and true or false
+        dontCountCache[unitDefID] = v
+    end
+    return v
+end
+
 local function AddAllianceUnit(u, ud, teamID)
-    local cp = UnitDefs[ud].customParams
-    if cp and cp.dontcount == "1" then
+    if DontCount(ud) then
         return
     end
     local _, _, _, _, _, allianceID = spGetTeamInfo(teamID)
@@ -210,8 +221,7 @@ local function AddAllianceUnit(u, ud, teamID)
 end
 
 local function RemoveAllianceUnit(u, ud, teamID)
-    local cp = UnitDefs[ud].customParams
-    if cp and cp.dontcount == "1" then
+    if DontCount(ud) then
         return
     end
     local _, _, _, _, _, allianceID = spGetTeamInfo(teamID)
@@ -288,7 +298,7 @@ local function ProcessLastAlly()
             local t = teamlist[i]
             -- any team without units is dead to us; so only teams who are active AND have units matter
             local numAlive = aliveCount[t]
-            if #(Spring.GetTeamUnits(t)) == 0 then numAlive = 0 end
+            if (Spring.GetTeamUnitCount(t) or 0) == 0 then numAlive = 0 end
             if numAlive > 0 then
                 local playerlist = spGetPlayerList(t, true) -- active players
                 if playerlist then

@@ -29,6 +29,18 @@ local TransferUnit          = Spring.TransferUnit
 local GetUnitMass           = Spring.GetUnitMass
 local AreTeamsAllied        = Spring.AreTeamsAllied
 
+-- UnitDefs[].customParams builds a new table on every access, and
+-- AllowCommand runs for every order to every unit
+local isInfGun = {} -- unitDefID -> boolean
+local function IsInfGun(unitDefID)
+    local v = isInfGun[unitDefID]
+    if v == nil then
+        v = UnitDefs[unitDefID].customParams.infgun and true or false
+        isInfGun[unitDefID] = v
+    end
+    return v
+end
+
 local infguns = {}
 local infguns_indexes = {}
 local last_parsed_gun = 0
@@ -117,9 +129,7 @@ end
 
 -- Just allow to morph when the gun is still operative
 function gadget:AllowCommand(unitID, unitDefID, teamID, cmdID, cmdParams, cmdOptions)
-    local ud = UnitDefs[unitDefID]
-    local cp = ud.customParams
-    if not cp.infgun then
+    if not IsInfGun(unitDefID) then
         return true
     end
 
@@ -128,6 +138,7 @@ function gadget:AllowCommand(unitID, unitDefID, teamID, cmdID, cmdParams, cmdOpt
         return false
     end
 
+    local ud = UnitDefs[unitDefID]
     if not morphDefs[ud.name] then
         return true
     end
@@ -151,10 +162,10 @@ function gadget:UnitDestroyed(unitID, unitDefID, unitTeam, attackerID, attackerD
     end
 
     for u, morphData in pairs(GG['morphHandler'].GetMorphingUnits()) do
-        local ud = UnitDefs[GetUnitDefID(u)]
-        local cp = ud.customParams
+        local defID = GetUnitDefID(u)
+        local ud = UnitDefs[defID]
 
-        if cp.infgun and #(GetUnitIsTransporting(u)) ~= ud.transportCapacity then
+        if IsInfGun(defID) and #(GetUnitIsTransporting(u)) ~= ud.transportCapacity then
             GG['morphHandler'].StopMorph(u, morphData)
         end
     end

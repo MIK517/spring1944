@@ -245,24 +245,19 @@ local function IsMainGun(weaponNum)
 	return weaponNum <= info.weaponsWithAmmo
 end
 
-local function GetHeadingToTarget(headingPiece, target)
+local function GetHeadingToTarget(headingPiece, targetID)
+	-- called for every candidate target on every target scan: keep it free of
+	-- table allocations (GetUnitDirection returns plain numbers)
 	local tx, ty, tz
-	local heading
-	if #target == 1 then
-		if Spring.ValidUnitID(target[1]) then
-			tx, ty, tz = Spring.GetUnitPosition(target[1])
-		elseif Spring.ValidFeatureID(target[1]) then
-			tx, ty, tz = Spring.GetFeaturePosition(target[1])
-		else
-			target = nil
-		end
-	else
-		tx, ty, tz = target[1], target[2], target[3]
+	if Spring.ValidUnitID(targetID) then
+		tx, ty, tz = Spring.GetUnitPosition(targetID)
+	elseif Spring.ValidFeatureID(targetID) then
+		tx, ty, tz = Spring.GetFeaturePosition(targetID)
 	end
 	if tx then
 		local ux, uy, uz = Spring.GetUnitPiecePosDir(unitID, headingPiece)
-		local frontDir = Spring.GetUnitVectors(unitID)
-		heading = atan2(tx - ux, tz - uz) - atan2(frontDir[1], frontDir[3])
+		local frontX, _, frontZ = Spring.GetUnitDirection(unitID)
+		local heading = atan2(tx - ux, tz - uz) - atan2(frontX, frontZ)
 		if heading < 0 then
 			heading = heading + TAU
 		end
@@ -472,7 +467,7 @@ function WeaponPriority(targetID, attackerWeaponNum, attackerWeaponDefID, defPri
 	local newPriority = defPriority
 	--if prioritisedWeapon and attackerWeaponNum ~= prioritisedWeapon then
 		local headingPiece = info.aimPieces[attackerWeaponNum] and info.aimPieces[attackerWeaponNum][1] or base
-		local heading = GetHeadingToTarget(headingPiece, {targetID})
+		local heading = GetHeadingToTarget(headingPiece, targetID)
 		local _, currentHeading, _ = Spring.UnitScript.GetPieceRotation(headingPiece)
 		newPriority = GetAngleDiff(heading, currentHeading)
 	--end

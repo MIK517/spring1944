@@ -55,15 +55,52 @@ local blockAllyTeams = {}
 if (gadgetHandler:IsSyncedCode()) then
 -- SYNCED
 
+-- WeaponDefs[] / UnitDefs[].customParams build a new table on every access,
+-- and the call-ins below run for nearly every explosion and hit: read what
+-- they need once per def
+local weaponFearInfo = {} -- weaponDefID -> {...}
+local function GetWeaponFearInfo(weaponDefID)
+	local info = weaponFearInfo[weaponDefID]
+	if info == nil then
+		local cp = WeaponDefs[weaponDefID].customParams
+		info = {
+			fearID = cp.fearid,
+			fearAoe = cp.fearaoe,
+			resetsXP = (cp.howitzer or cp.infgun) and true or false,
+			smallarm = (cp.damagetype and cp.damagetype == "smallarm") and true or false,
+			-- SMGs and rifles without a fear id suppress when they hit
+			smallarmHit = (cp.damagetype == "smallarm" and not cp.fearid) and true or false,
+		}
+		weaponFearInfo[weaponDefID] = info
+	end
+	return info
+end
+
+local unitFearInfo = {} -- unitDefID -> {...}
+local function GetUnitFearInfo(unitDefID)
+	local info = unitFearInfo[unitDefID]
+	if info == nil then
+		local cp = UnitDefs[unitDefID].customParams
+		info = {
+			fearTarget = cp.feartarget and true or false,
+			blockFear = cp.blockfear and true or false,
+			proneSphereMoveMult = cp.pronespheremovemult or DEFAULT_PRONE_SPHERE_MOVE_MULT,
+		}
+		unitFearInfo[unitDefID] = info
+	end
+	return info
+end
+
 local function UpdateCollision(unitID, direction)
-	local unitDef = UnitDefs[Spring.GetUnitDefID(unitID)]
+	local unitDefID = Spring.GetUnitDefID(unitID)
+	local unitDef = UnitDefs[unitDefID]
 	
 	-- filter out static units like MG nests and AA/AT posts
 	if (unitDef.speed > 0) then
 		
 		-- filter out repeated calls on units already in proper state
 		if ((collisionUpdated[unitID] and direction == 1) or (collisionUpdated[unitID] == nil and direction == -1)) then
-			local sphereMult = unitDef.customParams.pronespheremovemult or DEFAULT_PRONE_SPHERE_MOVE_MULT
+			local sphereMult = GetUnitFearInfo(unitDefID).proneSphereMoveMult
 			
 			-- hitsphere update 
 			local scaleX, scaleY, scaleZ, offsetX, offsetY, offsetZ, volumeType, testType, primaryAxis = Spring.GetUnitCollisionVolumeData(unitID)
@@ -116,6 +153,11 @@ local function UpdateSuppressionCOB(unitID)
 end
 
 local function UpdateSuppressionLUS(unitID)
+	-- RestoreAfterCover only resets fear, unpins and stands the unit up. At fear 0
+	-- the scripts are already in that state, so skip the area search.
+	if (GetUnitRulesParam(unitID, "fear") or 0) == 0 then
+		return
+	end
 	if Spring.ValidUnitID(unitID) and restorelusScriptIDs[unitID] then
 		local unitInSmoke = GetUnitRulesParam(unitID, "smoked") == 1 
 		if unitInSmoke then
@@ -128,6 +170,7 @@ local function UpdateSuppressionLUS(unitID)
 				local nearbyUnitAllyTeam = GetUnitAllyTeam(nearbyUnits[i])
 				if nearbyUnits[i] ~= unitID and unitAllyTeam == nearbyUnitAllyTeam and fearShields[nearbyUnits[i]] then
 					Spring.UnitScript.CallAsUnit(unitID, restorelusScriptIDs[unitID])
+					break -- restoring once is enough
 				end
 			end
 		end
@@ -150,7 +193,7 @@ function gadget:UnitCreated(unitID, unitDefID)
 		restorelusScriptIDs[unitID] = env and env.RestoreAfterCover
 	end
 	
-	if UnitDefs[unitDefID].customParams.blockfear then
+	if GetUnitFearInfo(unitDefID).blockFear then
 		fearShields[unitID] = true
 	end
 	
@@ -207,11 +250,9 @@ end
 
 function gadget:UnitDamaged(unitID, unitDefID, unitTeam, damage, paralyzer, weaponDefID, projectileID, attackerID, attackerDefID, attackerTeam)
 	if (cobScriptIDs[unitID] or lusScriptIDs[unitID]) and weaponDefID and weaponDefID > 0 then
-		local wd = WeaponDefs[weaponDefID]
-		local cp = wd.customParams
 		-- SMGs and Rifles do a small amount of suppression cob side, so update suppression when hit by them
 		-- ... but be sure not to update suppression for a dead unit (UnitDamaged is called before UnitDestroyed, so cobScriptIDs[unitID] is still valid!)
-		if cp and cp.damagetype == "smallarm" and not cp.fearid and not GetUnitIsDead(unitID) then
+		if GetWeaponFearInfo(weaponDefID).smallarmHit and not GetUnitIsDead(unitID) then
 			UpdateCollision(unitID, -1) 
 			if cobScriptIDs[unitID] then
 				UpdateSuppressionCOB(unitID)
@@ -223,16 +264,15 @@ function gadget:UnitDamaged(unitID, unitDefID, unitTeam, damage, paralyzer, weap
 end
 
 function gadget:Explosion(weaponID, px, py, pz, ownerID)
-	local wd = WeaponDefs[weaponID]
-	local cp = wd.customParams
-	local fearID = cp.fearid
+	local info = GetWeaponFearInfo(weaponID)
+	local fearID = info.fearID
 	if not fearID then return false end
   
-	local unitsAtSpot = GetUnitsInSphere(px, py, pz, cp.fearaoe)
+	local unitsAtSpot = GetUnitsInSphere(px, py, pz, info.fearAoe)
 	local validOwnerID = ValidUnitID(ownerID)
 	
 	-- if the weapon is a howitzer shell reset the gun's experience to 0
-	if validOwnerID and (cp.howitzer or cp.infgun) then
+	if validOwnerID and info.resetsXP then
 		GG.Delay.DelayCall(SetUnitExperience, {ownerID, 0}, 1)
 	end
 
@@ -243,15 +283,12 @@ function gadget:Explosion(weaponID, px, py, pz, ownerID)
 	end
 
 	-- friendly smallarms fear doesn't apply
-	local smallarms = cp.damagetype and cp.damagetype == "smallarm"
+	local smallarms = info.smallarm
 
 	for i = 1, #unitsAtSpot do
 		local unitID = unitsAtSpot[i]
-		local ud = UnitDefs[GetUnitDefID(unitID)]
-		--[[if ud.customParams.blockfear == "1" then
-			blockAllyTeams[GetUnitAllyTeam(unitID)] = unitID
-		else]]--
-		if ud.customParams.feartarget then
+		local unitDefID = GetUnitDefID(unitID)
+		if unitDefID and GetUnitFearInfo(unitDefID).fearTarget then
 			local validTargetID = ValidUnitID(unitID)
 			if validTargetID then
 				local targetAllyTeam = GetUnitAllyTeam(unitID)
@@ -279,10 +316,11 @@ function gadget:Explosion(weaponID, px, py, pz, ownerID)
 			end
 		end
 	end
-	-- reset tables
-	targets = {}
+	-- reset the target list in place
+	for i = 1, tLength do
+		targets[i] = nil
+	end
 	tLength = 0
-	blockAllyTeams = {}
 	
 	return false
 end

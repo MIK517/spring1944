@@ -42,12 +42,17 @@ local lookCmdDesc = {
 	cursor = "Patrol",
 }
 
-function CheckForBinocsWeapon(weapon)
-	local retVal = false
-	if (WeaponDefs[weapon.weaponDef].customParams.binocs) and (WeaponDefs[weapon.weaponDef].customParams.binocs == "1") then
-		retVal = true
+-- WeaponDefs[].customParams builds a new table on every access, and the
+-- Explosion / ProjectileCreated call-ins below run for nearly every weapon
+local isBinocsWeapon = {}
+for weaponID, weaponDef in pairs(WeaponDefs) do
+	if weaponDef.customParams.binocs == "1" then
+		isBinocsWeapon[weaponID] = true
 	end
-	return retVal
+end
+
+function CheckForBinocsWeapon(weapon)
+	return isBinocsWeapon[weapon.weaponDef] == true
 end
 
 function Look(unitID, weaponNumber, x, y, z)
@@ -55,8 +60,7 @@ function Look(unitID, weaponNumber, x, y, z)
 end
 
 function gadget:Explosion(weaponID, px, py, pz, ownerID)
-	local weapDef = WeaponDefs[weaponID]
-	if weapDef and (not weapDef.customParams.binocs or weapDef.customParams.binocs ~= "1" or ownerID == nil) then
+	if WeaponDefs[weaponID] and (not isBinocsWeapon[weaponID] or ownerID == nil) then
 		return false
 	else
 		local team = GetUnitTeam(ownerID)
@@ -74,8 +78,7 @@ function gadget:Explosion(weaponID, px, py, pz, ownerID)
 end
 
 function gadget:ProjectileCreated(projID, ownerID, weaponID)
-	local weapDef = WeaponDefs[weaponID]
-	if weapDef and (not weapDef.customParams.binocs or weapDef.customParams.binocs ~= "1" or ownerID == nil) then
+	if WeaponDefs[weaponID] and (not isBinocsWeapon[weaponID] or ownerID == nil) then
 		return
 	else
 		local binocInfo = activeBinocs[ownerID]

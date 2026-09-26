@@ -279,8 +279,16 @@ function gadget:AllowCommand(unitID, unitDefID, teamID, cmdID, cmdParams, cmdOpt
     return true
 end
 
+-- WeaponDefs[].customParams builds a new table on every access, and this
+-- call-in runs for nearly every explosion: keep one copy per weapon
+local weaponParamsCache = {} -- weaponDefID -> customParams | false
+
 function gadget:Explosion(weaponID, px, py, pz, ownerID)
-    local params = WeaponDefs[weaponID].customParams
+    local params = weaponParamsCache[weaponID]
+    if params == nil then
+        params = WeaponDefs[weaponID].customParams or false
+        weaponParamsCache[weaponID] = params
+    end
     if not params then
         return false
     end

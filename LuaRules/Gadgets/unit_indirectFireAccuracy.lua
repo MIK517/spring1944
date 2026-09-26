@@ -28,24 +28,39 @@ local function Dist2D(x1, z1, x2, z2)
     return math.sqrt((x2 - x1) ^ 2 + (z2 - z1) ^ 2)
 end
 
+-- UnitDefs[].weapons builds new tables on every access, and updateUnit runs
+-- every frame, so keep what it needs per unit type
+local weaponInfoCache = {} -- unitDefID -> {count = #weapons, baseAccuracy = weapon 1 accuracy}
+local function GetWeaponInfo(unitDefID)
+	local info = weaponInfoCache[unitDefID]
+	if not info then
+		local weapons = UnitDefs[unitDefID].weapons
+		info = {
+			count = #weapons,
+			baseAccuracy = weapons[1] and WeaponDefs[weapons[1].weaponDef].accuracy,
+		}
+		weaponInfoCache[unitDefID] = info
+	end
+	return info
+end
+
+-- returns the target position as x, y, z (nil if there is none)
 local function GetTargetPos(unitID, weaponNum)
 	local i, _, target = Spring.GetUnitWeaponTarget(unitID, weaponNum)
 
 	-- targeting a spot on the ground
 	if i == 2 then
-		return target
+		return target[1], target[2], target[3]
 	end
 
 	-- targeting a unit
 	if i == 1 then
-		local x, y, z = Spring.GetUnitPosition(target)
-		return { x, y, z }
+		return Spring.GetUnitPosition(target)
 	end
 
 	-- targeting a projectile: seems unlikely in S44, but ... completeness!
 	if i == 3 then
-		local x, y, z = Spring.GetProjectilePosition(target)
-		return { x, y, z }
+		return Spring.GetProjectilePosition(target)
 	end
 
 	return nil
@@ -63,13 +78,11 @@ end
 -- extra function calls out of a thing that runs every frame.
 -- premature optimisation, etc., etc.
 local function reset(unitID)
-	local unitDefID = Spring.GetUnitDefID(unitID)
-	local weapons = UnitDefs[unitDefID].weapons
-	local weaponDef = WeaponDefs[weapons[1].weaponDef]
-	local baseAccuracy = weaponDef.accuracy
+	local info = GetWeaponInfo(Spring.GetUnitDefID(unitID))
+	local baseAccuracy = info.baseAccuracy
 
-	for i=1, #weapons do
-		Spring.SetUnitWeaponState(unitID, i, {accuracy = baseAccuracy})
+	for i=1, info.count do
+		Spring.SetUnitWeaponState(unitID, i, "accuracy", baseAccuracy)
 	end
 
 	Spring.SetUnitRulesParam(unitID, "zeroed", 0)
@@ -82,19 +95,17 @@ local function updateUnit(unitID, coords)
 	if lastHit[unitID][1] == nil then
 		return
 	end
-	local targetPos = GetTargetPos(unitID, 1)
-	if not targetPos then
+	local tx, ty, tz = GetTargetPos(unitID, 1)
+	if not tx then
 		return
 	end
 
-	local unitDefID = Spring.GetUnitDefID(unitID)
-	local weapons = UnitDefs[unitDefID].weapons
-	local weaponDef = WeaponDefs[weapons[1].weaponDef]
-	local baseAccuracy = weaponDef.accuracy
+	local info = GetWeaponInfo(Spring.GetUnitDefID(unitID))
+	local baseAccuracy = info.baseAccuracy
 	local newAccuracy
 
 	local allyTeam = Spring.GetUnitAllyTeam(unitID)
-	local targetInLosOrRadar = Spring.GetPositionLosState(targetPos[1], targetPos[2], targetPos[3], allyTeam)
+	local targetInLosOrRadar = Spring.GetPositionLosState(tx, ty, tz, allyTeam)
 	if targetInLosOrRadar then
 		local ux, _ , uz = Spring.GetUnitPosition(unitID)
 
@@ -108,8 +119,8 @@ local function updateUnit(unitID, coords)
 			return
 		end
 
-		local targetDist = Dist2D(targetPos[1], targetPos[3], ux, uz)
-		local hitDist = Dist2D(coords[1], coords[3], targetPos[1], targetPos[3])
+		local targetDist = Dist2D(tx, tz, ux, uz)
+		local hitDist = Dist2D(coords[1], coords[3], tx, tz)
 
 		local currentAccuracy = Spring.GetUnitWeaponState(unitID, 1, "accuracy")
 
@@ -124,22 +135,20 @@ local function updateUnit(unitID, coords)
 		Spring.SetUnitRulesParam(unitID, "zeroed", 0)
 	end
 
-	for i=1, #weapons do
-		Spring.SetUnitWeaponState(unitID, i, {accuracy = newAccuracy})
+	for i=1, info.count do
+		Spring.SetUnitWeaponState(unitID, i, "accuracy", newAccuracy)
 	end
 end
 
 function gadget:UnitCreated(unitID, unitDefID, unitTeam, builderID)
 	if indirectUnitDefIDs[unitDefID] then
-		local weapons = UnitDefs[unitDefID].weapons
-		if #weapons > 0 then
+		local info = GetWeaponInfo(unitDefID)
+		if info.count > 0 then
 			lastHit[unitID] = {}
 			firingPositions[unitID] = {}
 
-			local weaponDef = WeaponDefs[weapons[1].weaponDef]
-			local baseAccuracy = weaponDef.accuracy
-			for i=1, #weapons do
-				Spring.SetUnitWeaponState(unitID, i, {accuracy = baseAccuracy})
+			for i=1, info.count do
+				Spring.SetUnitWeaponState(unitID, i, "accuracy", info.baseAccuracy)
 			end
 		end
 	end

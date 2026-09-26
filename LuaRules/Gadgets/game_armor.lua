@@ -86,6 +86,17 @@ local bounces = {} -- unitDefID = {base, turret, super}
 -- Remember where projectile owners were when they were spawned
 local ownerPos = {}
 
+-- WeaponDefs[].customParams builds a new table on every access
+local smallArmCache = {} -- weaponDefID -> boolean
+local function IsSmallArm(weaponDefID)
+	local v = smallArmCache[weaponDefID]
+	if v == nil then
+		v = WeaponDefs[weaponDefID].customParams.damagetype == "smallarm"
+		smallArmCache[weaponDefID] = v
+	end
+	return v
+end
+
 ----------------------------------------------------------------
 --speedups
 ----------------------------------------------------------------
@@ -189,7 +200,7 @@ local function ResolveDamage(targetID, targetDefID, pieceHit, projectileID, weap
 	if not unitInfo or not unitInfo.armour or not weaponInfo or not weaponDef then return damage end	
 	
 	-- smallarms do 0 damage to heavy armour
-	if unitInfo and weaponDef.customParams.damagetype == "smallarm" then 
+	if unitInfo and IsSmallArm(weaponDefID) then 
 		-- 50cal damage to armoured vehicles
 		if Game.armorTypes[UnitDefs[targetDefID].armorType] == "armouredvehicles" and weaponDef.interceptedByShieldType == 16 then 
 			return damage
@@ -376,10 +387,21 @@ function gadget:UnitPreDamaged(unitID, unitDefID, unitTeam, damage, paralyzer, w
 	return ResolveDamage(unitID, unitDefID, pieceHit, projectileID, weaponDefID, damage, ax, ay, az)
 end
 
+-- GetUnitPieceMap builds a table of every piece on each call; the muzzle
+-- piece is the same for every unit of a type
+local muzzlePieceCache = {} -- unitDefID -> piece index
+
 function gadget:ProjectileCreated(projectileID, ownerID, weaponID)
 	if weaponInfos[weaponID] and ownerID then
-		local pieceMap = Spring.GetUnitPieceMap(ownerID)
-		local piece = pieceMap["flare_1"] or pieceMap["flare"] or pieceMap["base"]
+		local ownerDefID = Spring.GetUnitDefID(ownerID)
+		local piece = ownerDefID and muzzlePieceCache[ownerDefID]
+		if not piece then
+			local pieceMap = Spring.GetUnitPieceMap(ownerID)
+			piece = pieceMap["flare_1"] or pieceMap["flare"] or pieceMap["base"]
+			if ownerDefID then
+				muzzlePieceCache[ownerDefID] = piece
+			end
+		end
 		local x,y,z = Spring.GetUnitPiecePosDir(ownerID, piece)
 		if not ownerPos[ownerID] then ownerPos[ownerID] = {} end
 		ownerPos[ownerID][projectileID] = {x,y,z}
