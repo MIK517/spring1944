@@ -489,8 +489,8 @@ function gadget:GameFrame(n)
     elseif (n % 45 == 0) then
         if toDestroy then
             for u in pairs(toDestroy) do
-                local ud = spGetUnitDefID(u)
-                local isFlag = ud.customParams and ud.customParams.flag
+                local udid = spGetUnitDefID(u)
+                local isFlag = udid and UnitDefs[udid].customParams.flag
                 if not isFlag then
                     spDestroyUnit(u, true)
                 end

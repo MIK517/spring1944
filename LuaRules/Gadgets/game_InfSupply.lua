@@ -139,6 +139,11 @@ local function CleanUp(unitID, unitDefID, teamID)
 	if ammoRangeCache[unitDefID] then
 		ammoSuppliers[teamID][unitID] = nil
 	end
+	-- dead (or given away) infantry would otherwise stay listed for the rest
+	-- of the match
+	if infantry[teamID] then
+		infantry[teamID][unitID] = nil
+	end
 end
 
 function gadget:UnitDestroyed(unitID, unitDefID, teamID)
