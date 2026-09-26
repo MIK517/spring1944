@@ -31,6 +31,14 @@ end
 for i = 1, info.numRamps do
 	ramps[i] = piece("ramp" .. i)
 end
+-- a model with a single ramp may call it just "ramp"
+if info.numRamps == 1 and not ramps[1] then
+	ramps[1] = piece("ramp")
+end
+
+-- Models without seat pieces (p1, p2, ...) carry their passengers hidden and
+-- put them ashore one at a time with the turret/grabber/link crane instead.
+local Crane = (not attachPoints[1]) and include("BoatCrane.lua")
 
 local function RampUp()
 	--Spring.MoveCtrl.Enable(unitID)
@@ -71,11 +79,11 @@ function script.TransportPickup(passengerID, skip)
 			Turn(ramps[i], x_axis, math.rad(95/info.numRamps), math.rad(30))
 			WaitForTurn(ramps[i], x_axis)
 		end
-		if numPassengers == 0 then
+		if numPassengers == 0 and arm then
 			Move(arm, z_axis, 0)
 		end
 	end
-	Spring.UnitScript.AttachUnit(attachPoints[numPassengers + 1], passengerID)
+	Spring.UnitScript.AttachUnit(attachPoints[numPassengers + 1] or -1, passengerID)
 	-- only keep track of passengers the engine actually let us load
 	if Spring.GetUnitTransporter(passengerID) == unitID then
 		numPassengers = numPassengers + 1
@@ -87,9 +95,30 @@ function script.TransportPickup(passengerID, skip)
 	Spring.MoveCtrl.Disable(unitID)
 end
 
+local function CraneDrop(passengerID, x, y, z)
+	SetUnitValue(COB.BUSY, 1)
+	for i = 1, info.numRamps do
+		Turn(ramps[i], x_axis, math.rad(95/info.numRamps), math.rad(30))
+		WaitForTurn(ramps[i], x_axis)
+	end
+	Crane.Drop(passengerID, x, y, z)
+	for i = 1, numPassengers do
+		if passengers[i] == passengerID then
+			table.remove(passengers, i)
+			numPassengers = numPassengers - 1
+			break
+		end
+	end
+	SetUnitValue(COB.BUSY, 0)
+end
+
 function script.TransportDrop(passengerID, x, y, z)
 	Signal(2)
 	SetSignalMask(2)
+	if Crane then
+		CraneDrop(passengerID, x, y, z)
+		return
+	end
 	Spring.MoveCtrl.Enable(unitID)
 	SetUnitValue(COB.BUSY, 1)
 	for i = 1, info.numRamps do

@@ -45,7 +45,6 @@ local US_LCVP = InfantryLandingCraft:New{
 SWE_LCVP = US_LCVP:New{
 	objectName		= "<SIDE>/SWELCVP.s3o",
 	corpse			= "uslcvp_dead",
-	script			= "uslcvp.cob",
 	customparams = {
 		soundcategory		= "SWE/Boat",
 		normaltex			= "unittextures/SWELCVP_normals.png",
