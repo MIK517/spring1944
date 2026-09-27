@@ -13,14 +13,12 @@ end
 -- function localisations
 -- Synced Read
 local GetUnitHealth = Spring.GetUnitHealth
+local GetUnitSelfDTime = Spring.GetUnitSelfDTime
 -- Synced Ctrl
 local EditUnitCmdDesc   = Spring.EditUnitCmdDesc
 local FindUnitCmdDesc   = Spring.FindUnitCmdDesc
 
 -- Constants
-
--- Variables
-local detonate_in_progress = false
 
 if gadgetHandler:IsSyncedCode() then
 --	SYNCED
@@ -57,7 +55,8 @@ function gadget:AllowCommand(unitID, unitDefID, teamID, cmdID, cmdParams, cmdOpt
 		if cp and cp.candetonate then
 			local _, _, _, _, buildProgress = GetUnitHealth(unitID)
 			if buildProgress == 1.0 then
-				if detonate_in_progress then
+				-- the order toggles this unit's own countdown
+				if (GetUnitSelfDTime(unitID) or 0) > 0 then
 					-- change button back to Detonate
 					change_detonate_button(unitID, "Detonate", get_detonate_tooltip(unitDefID))
 				else
@@ -67,7 +66,6 @@ function gadget:AllowCommand(unitID, unitDefID, teamID, cmdID, cmdParams, cmdOpt
             else
                 return false
 			end
-			detonate_in_progress = not detonate_in_progress
 		else -- units without candetonate tag		
 			-- do nothing
 		end

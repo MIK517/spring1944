@@ -86,6 +86,7 @@ local spGetActiveCommand    = Spring.GetActiveCommand
 local spGetActiveCmdDesc    = Spring.GetActiveCmdDesc
 local spGetActiveCmdDescs   = Spring.GetActiveCmdDescs
 local spGetSelectedUnits    = Spring.GetSelectedUnits
+local spGetUnitDefID        = Spring.GetUnitDefID
 local spGetFullBuildQueue   = Spring.GetFullBuildQueue
 local spIsUnitSelected      = Spring.IsUnitSelected
 local spSendCommands        = Spring.SendCommands
@@ -278,7 +279,34 @@ function createMyButton(cmd)
     end
 end
 
+-- Units meant to be blown up on purpose (satchel charges) get their self-destruct
+-- as a "Detonate" button; every other unit keeps it hidden.
+local canDetonateDefs = {}
+for unitDefID, unitDef in pairs(UnitDefs) do
+    if unitDef.customParams.candetonate then
+        canDetonateDefs[unitDefID] = true
+    end
+end
+
+-- Only when every selected unit can detonate: the order goes to the whole
+-- selection, and would blow up anything else selected along with them.
+local function __selectionCanDetonate()
+    local selection = spGetSelectedUnits()
+    if #selection == 0 then
+        return false
+    end
+    for i = 1, #selection do
+        if not canDetonateDefs[spGetUnitDefID(selection[i])] then
+            return false
+        end
+    end
+    return true
+end
+
 local function __isUnwanted(cmd)
+    if cmd.id == CMD.SELFD and __selectionCanDetonate() then
+        return false
+    end
     if table.contains(COMMANDSTOEXCLUDE, cmd.action) then
         return true
     end
