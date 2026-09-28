@@ -428,14 +428,20 @@ function gadget:UnitDestroyed(u, ud, team)
 end
 
 -- note: Taken comes before Given
+-- finishedUnits must follow the unit around: a finished unit handed over from
+-- Gaia (spoils of war) was counted when given but never uncounted when it
+-- died, so its new owner could not be defeated any more.
 function gadget:UnitGiven(u, ud, newTeam, oldTeam)
-    if (newTeam ~= gaiaTeamID) and (not select(3,spGetUnitIsStunned(u))) then
+    if newTeam == gaiaTeamID then
+        finishedUnits[u] = nil
+    elseif not select(3, spGetUnitIsStunned(u)) then -- not being built
+        finishedUnits[u] = true
         AddAllianceUnit(u, ud, newTeam)
     end
 end
 
 function gadget:UnitTaken(u, ud, oldTeam, newTeam)
-    if (oldTeam ~= gaiaTeamID) and (select(5,spGetUnitHealth(u))>=1) then
+    if (oldTeam ~= gaiaTeamID) and finishedUnits[u] then
         RemoveAllianceUnit(u, ud, oldTeam)
     end
 end
