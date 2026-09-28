@@ -59,6 +59,28 @@ local factionChangeList
 
 local RADIUS = 128
 
+-- The sandbox/GM toolbox has its own button under the circle, shown only when
+-- the gm_team_enable modoption is on. The circle's middle entry is a random
+-- nation: an empty side, which game_setup.lua resolves at game start.
+local GM_SIDE = "random team (gm)"
+local GM_ENABLED
+do
+    local gmOption = Spring.GetModOptions().gm_team_enable
+    GM_ENABLED = (gmOption == true) or (gmOption == 1) or (gmOption == "1")
+end
+local GM_BUTTON_WIDTH = 96
+local GM_BUTTON_HEIGHT = 24
+local GM_BUTTON_GAP = 8
+local GM_BUTTON_FONT_SIZE = 14
+
+-- relative to the widget position (px, py), like the circle
+local function GetGMButtonRect()
+    local x0 = RADIUS - 0.5 * GM_BUTTON_WIDTH
+    local y1 = -GM_BUTTON_GAP
+    return x0, y1 - GM_BUTTON_HEIGHT, x0 + GM_BUTTON_WIDTH, y1
+end
+local DrawGMButton -- defined below FactionChangeList
+
 local SIDEDATA = {
     [1] = {
         sideName = "random team (gm)",
@@ -120,6 +142,10 @@ function getTeamName()
 end
 
 function getTeamNumber()
+    -- the GM pick lives on its own button, not in the circle
+    if GM_ENABLED and mySide == GM_SIDE then
+        return 0
+    end
     local side = getTeamName()
     local sidedata = spGetSideData()
     for i=1,#sidedata do
@@ -206,6 +232,9 @@ function widget:DrawScreen()
     else 
         factionChangeList = glCreateList(FactionChangeList)
     end
+    if GM_ENABLED then
+        DrawGMButton()
+    end
     glPopMatrix()
 
     
@@ -277,9 +306,53 @@ function FactionChangeList()
     end
 end
 
+-- drawn every frame rather than in the display list, as it has text
+function DrawGMButton()
+    local x0, y0, x1, y1 = GetGMButtonRect()
+    if mySide == GM_SIDE then
+        glColor(0.8, 0.6, 0, 0.8)
+    else
+        glColor(0, 0, 0, 0.5)
+    end
+    glRect(x0, y0, x1, y1)
+    glColor(1, 1, 1, 1)
+    glText("GM tools", 0.5 * (x0 + x1), 0.5 * (y0 + y1), GM_BUTTON_FONT_SIZE, "cvo")
+end
+
+local function SelectSide(side)
+    mySide = side
+    spSendLuaRulesMsg('\138' .. mySide)
+    if factionChangeList then
+        glDeleteList(factionChangeList)
+    end
+    factionChangeList = glCreateList(FactionChangeList)
+end
+
+local function IsOverGMButton(mx, my)
+    if not GM_ENABLED then
+        return false
+    end
+    local x0, y0, x1, y1 = GetGMButtonRect()
+    local lx, ly = mx - px, my - py
+    return (lx >= x0) and (lx <= x1) and (ly >= y0) and (ly <= y1)
+end
+
 
 
 function widget:MousePress(mx, my, mButton)
+
+    if IsOverGMButton(mx, my) then
+        if (mButton == 2 or mButton == 3) then
+            -- Dragging
+            return true
+        end
+        if spGetSpectatingState() then
+            widgetHandler:RemoveWidget(self)
+            return false
+        end
+        SelectSide(GM_SIDE)
+        return true
+    end
 
     -- Check we are on the circle
     local R = RADIUS

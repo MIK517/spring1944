@@ -444,7 +444,9 @@ local function GetStartUnit(teamID)
 	-- Check for GM / Random team
 	if startUnit == "gmtoolbox" then
 		local randSide = PickRandomSide(teamID)
-		if (modOptions.gm_team_enable == "0") then
+		-- off unless the modoption is on (its default is off), as the in-game
+		-- faction chooser only offers the GM button then
+		if not OptionEnabled(modOptions.gm_team_enable) then
 			side, startUnit = randSide, GetSideData(randSide)
 		else
 			side = randSide
