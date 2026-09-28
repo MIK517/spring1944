@@ -78,6 +78,19 @@ local sortiesWindow
 local buildWindow
 local updateRequired = true
 local queue = {}
+-- Queue counts changed, but the commands did not: update the count labels of
+-- the existing build buttons instead of rebuilding the whole panel.
+local queueUpdateRequired = false
+-- Build buttons of the current panel by the unitDefID they build:
+-- {image = Chili.Image, label = Chili.Label or nil, size = button size}
+local buildButtons = {}
+-- A full rebuild makes a button, an icon and a label per build option, which is
+-- thousands of objects for the GM toolbox. Hold rebuilds, and count updates, to
+-- one per interval of real time, so they still work while paused.
+local MIN_REBUILD_INTERVAL = 0.2
+local MIN_QUEUE_UPDATE_INTERVAL = 0.1
+local lastRebuildTimer
+local lastQueueUpdateTimer
 
 -- CONTROLS
 local min, max = math.min, math.max
@@ -91,6 +104,8 @@ local spGetFullBuildQueue   = Spring.GetFullBuildQueue
 local spIsUnitSelected      = Spring.IsUnitSelected
 local spSendCommands        = Spring.SendCommands
 local spGetViewGeometry     = Spring.GetViewGeometry
+local spGetTimer            = Spring.GetTimer
+local spDiffTimers          = Spring.DiffTimers
 
 
 -- SCRIPT FUNCTIONS
@@ -192,6 +207,29 @@ function findButtonData(cmd)
     return buttontext, container, isMorph, isState, isSortie, isBuild, texture, tooltip    
 end
 
+-- the queue count shown in the top left corner of a build button's icon
+local function CreateCountLabel(image, text, size)
+    return Chili.Label:New {
+        parent = image;
+        width="100%",
+        height="100%",
+        y=5,
+        x=5,
+        caption = text,
+        align   = "left",
+        valign  = "top",
+        font = {
+            size = Chili.OptimumFontSize(main_win.font,
+                                         text,
+                                         size,
+                                         0.4 * size) - 2,
+            outlineColor = {0.0,0.0,0.0,1.0},
+            outline = true,
+            shadow  = false,
+        },
+    }
+end
+
 function createMyButton(cmd)
     if(type(cmd) == 'table')then
         local viewSizeX, viewSizeY = spGetViewGeometry()
@@ -237,27 +275,13 @@ function createMyButton(cmd)
                 keepAspect = true,
                 file = texture,
             }
+            local label
             if buttontext ~= "" then
                 button.caption = ""
-                local label = Chili.Label:New {
-                    parent = image;
-                    width="100%",
-                    height="100%",
-                    y=5,
-                    x=5,
-                    caption = buttontext,
-                    align   = "left",
-                    valign  = "top",
-                    font = {
-                        size = Chili.OptimumFontSize(main_win.font,
-                                                     buttontext,
-                                                     size,
-                                                     0.4 * size) - 2,
-                        outlineColor = {0.0,0.0,0.0,1.0},
-                        outline = true,
-                        shadow  = false,
-                    },
-                }
+                label = CreateCountLabel(image, buttontext, size)
+            end
+            if isBuild and not isMorph then
+                buildButtons[-cmd.id] = {image = image, label = label, size = size}
             end
         end
 
@@ -422,6 +446,7 @@ local function getQueue()
 end
 
 function loadPanel()
+    buildButtons = {}
     resetWindow(commandWindow)
     resetWindow(stateWindow)
     resetWindow(sortiesWindow)
@@ -438,6 +463,24 @@ function loadPanel()
     end
 
     ResizeContainers()
+end
+
+-- Refresh the queue counts on the build buttons already in the panel
+local function UpdateQueueCounts()
+    getQueue()
+    for unitDefID, entry in pairs(buildButtons) do
+        local count = queue[unitDefID]
+        local text = count and tostring(count) or ""
+        if entry.label then
+            entry.label:SetCaption(text)
+        elseif text ~= "" then
+            entry.label = CreateCountLabel(entry.image, text, entry.size)
+        end
+    end
+end
+
+local function IntervalPassed(timer, interval)
+    return (not timer) or (spDiffTimers(spGetTimer(), timer) >= interval)
 end
 
 function ResetComWin(cmd, optLine)
@@ -674,21 +717,22 @@ end
 
 -- A new order replacing a build queue, or a build finishing, does not fire
 -- CommandsChanged, so the queue counts on the build buttons would go stale.
+-- Only the counts change, so they are updated in place.
 function widget:UnitCommand(unitID)
     if spIsUnitSelected(unitID) then
-        updateRequired = true
+        queueUpdateRequired = true
     end
 end
 
 function widget:UnitCmdDone(unitID)
     if spIsUnitSelected(unitID) then
-        updateRequired = true
+        queueUpdateRequired = true
     end
 end
 
 function widget:UnitFromFactory(unitID, unitDefID, unitTeam, factID)
     if spIsUnitSelected(factID) then
-        updateRequired = true
+        queueUpdateRequired = true
     end
 end
 
@@ -709,8 +753,19 @@ function widget:DrawScreen()
         main_win:Show()
     end
     if updateRequired then
-        updateRequired = false
-        loadPanel()
+        -- a pending rebuild recounts the queues too, so it takes precedence
+        if IntervalPassed(lastRebuildTimer, MIN_REBUILD_INTERVAL) then
+            updateRequired = false
+            queueUpdateRequired = false
+            lastRebuildTimer = spGetTimer()
+            loadPanel()
+        end
+    elseif queueUpdateRequired then
+        if IntervalPassed(lastQueueUpdateTimer, MIN_QUEUE_UPDATE_INTERVAL) then
+            queueUpdateRequired = false
+            lastQueueUpdateTimer = spGetTimer()
+            UpdateQueueCounts()
+        end
     end
 end
 
