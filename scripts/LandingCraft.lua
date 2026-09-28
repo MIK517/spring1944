@@ -386,6 +386,7 @@ elseif cfg.loader == "arm" then
 	local carry = NamedPiece(cfg.carry or "base")
 	local hideInfantry = cfg.hideinfantry
 	local pickupArm = cfg.pickuparm
+	local ARM_SETTLE_TIME = 50
 
 	-- local heading from the base piece to world position x, z, and distance
 	local function Reach(x, z)
@@ -436,9 +437,12 @@ elseif cfg.loader == "arm" then
 		OpenRamp()
 		local heading, dist = Reach(x, z)
 		Turn(shoulder, y_axis, heading)
+		Move(arm, z_axis, dist + 5)
 		AttachUnit(arm, passengerID)
-		Move(arm, z_axis, dist + 5, 10000)
-		WaitForMove(arm, z_axis)
+		-- Passengers only follow their piece at the end of a frame, after the
+		-- animations: letting go straight away would leave this one where it
+		-- was, under the craft.
+		Sleep(ARM_SETTLE_TIME)
 		if GetUnitTransporter(passengerID) == unitID then
 			DropUnit(passengerID)
 		end
