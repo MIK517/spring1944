@@ -191,6 +191,27 @@ local options = {
 	},
 	
 	{
+		key = "sortie_interface",
+		name = "Air Sortie Interface",
+		desc = "Where ready air sorties are called in from. Global panel (default): a panel at the top left lists every ready sortie of your team, and clicking one then a target calls it in. Building command card: the sorties are called in from an Air tab on the command card of a selected radio station, airfield or HQ. (key = 'sortie_interface')",
+		type = "list",
+		section = '4other',
+		def = "global",
+		items = {
+			{
+				key = "global",
+				name = "Global panel",
+				desc = "A panel lists every ready sortie of your team.",
+			},
+			{
+				key = "building",
+				name = "Building command card",
+				desc = "Sorties are called from the Air tab of a selected radio station, airfield or HQ.",
+			},
+		},
+	},
+
+	{
 		key = "gm_team_enable",
 		name = "Enable Sandbox/GM tools faction",
 		desc = "Allows the sandbox/game master tools faction to spawn, rather than changing to a random team (key = 'gm_team_enable')",

@@ -1696,9 +1696,17 @@ local function GetButton(parent, name, selectionIndex, x, y, xStr, yStr, width, 
 		externalFunctionsAndData.SetSelection(false)
 		externalFunctionsAndData.SetBuildQueueCount(nil)
 		
-		-- Update stockpile progress (and sortie "N Ready" counts)
+		-- Update stockpile progress (and sortie "N Ready" counts, shown as N)
 		if command and (DRAW_NAME_COMMANDS[command.id] or s44Config.sortieCommands[command.id]) and command.name then
-			SetText(textConfig.bottomRightLarge.name, command.name)
+			if s44Config.sortieCommands[command.id] then
+				-- The disabled state decides whether text shows; update it first.
+				SetDisabled(command.disabled)
+				-- Right aligned like factory queue counts; the pictures have
+				-- badges at the bottom left.
+				SetText(textConfig.queue.name, command.name:match("^(%d+)") or command.name)
+			else
+				SetText(textConfig.bottomRightLarge.name, command.name)
+			end
 		end
 		
 		isStateCommand = command and (command.type == CMDTYPE.ICON_MODE and #command.params > 1)
@@ -2300,6 +2308,10 @@ local function HiddenCommand(command)
 		-- Only satchel charges show their self-destruct, as Detonate.
 		return not selectionCanDetonate
 	end
+	if s44Config.hideSortieCalls and s44Config.sortieCommands[command.id] then
+		-- Called from the Air Support panel (gui_s44_sortie_panel.lua).
+		return true
+	end
 	return hiddenCommands[command.id] or command.hidden or (commandCulling and commandCulling[command.id])
 end
 
@@ -2319,7 +2331,7 @@ local function ProcessCommandPosition(command, unitMobilePanelSize)
 		local data = commandPanels[i]
 		local found, position = data.inclusionFunction(command.id, factoryUnitDefID, false, unitMobilePanelSize)
 		if found then
-			if not data.isBuild then
+			if not (data.isBuild or data.paged) then
 				data.buttons.AddCommandPosition(command.id)
 			elseif not position then
 				data.pagedCount = data.pagedCount + 1
@@ -2364,6 +2376,8 @@ local function ProcessCommand(command, factoryUnitID, factoryUnitDefID, fakeFact
 					return
 				end
 				x, y = data.buttons.IndexToPosition(index)
+			elseif data.paged then
+				x, y = data.buttons.IndexToPosition(data.commandCount)
 			else
 				x, y = data.buttons.CommandToPosition(command.id, data.commandCount)
 			end
@@ -2453,7 +2467,7 @@ local function GetPageControl(data)
 end
 
 local function UpdatePaging(data)
-	if not data.isBuild then
+	if not (data.isBuild or data.paged) then
 		return
 	end
 	if data.pagedCount > PAGE_BUTTON_SPACE then
@@ -2746,7 +2760,16 @@ local function InitializeControls()
 			data.buttons.ApplyGridHotkeys(gridMap, (gridCustomOverrides and gridCustomOverrides[data.name]) or {})
 		end
 	end
-	
+
+	-- Lets other widgets (and scripted tests) open a tab by panel name.
+	WG.IntegralMenuSelectTab = function(name)
+		local data = commandPanelMap[name]
+		if data and data.tabButton then
+			data.tabButton.DoClick()
+			return true
+		end
+	end
+
 	statePanel.holder = Control:New{
 		x = (100 - stateSectionWidth) .. "%",
 		y = "0%",

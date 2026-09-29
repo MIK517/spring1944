@@ -28,7 +28,7 @@ local weakMetaTable = {__mode="k"}
 
 local loaded = {}
 local requested = {}
-local unitPicUsers = setmetatable({}, weakMetaTable)
+local preloadedUnitPics = {}
 
 local placeholderFilename = theme.skin.icons.imageplaceholder
 local placeholderDL = gl.CreateList(gl.Texture,CHILI_DIRNAME .. "skins/default/empty.png")
@@ -74,13 +74,18 @@ function TextureHandler.LoadTexture(arg1,arg2,arg3)
      obj = arg2
   end
 
-  --// Unit build pictures ("#unitDefID") are bound directly: a display list
-  --// made while the game is starting can keep a stale texture (drawn white).
+  --// Unit build pictures ("#unitDefID") are created by the engine the first
+  --// time they are bound. Controls are drawn into display lists, and a
+  --// texture first bound while a list is recorded is left empty (drawn
+  --// white) for the rest of the game. So they are loaded in Update() first,
+  --// outside any display list, and then bound directly.
   if (type(filename) == 'string') and (filename:byte(1) == 35) then
-    if obj then
-      unitPicUsers[obj] = true
+    if preloadedUnitPics[filename] then
+      glActiveTexture(activeTexID,glTexture,filename)
+    else
+      AddRequest(filename,obj)
+      glActiveTexture(activeTexID,glCallList,placeholderDL)
     end
-    glActiveTexture(activeTexID,glTexture,filename)
     return
   end
 
@@ -90,18 +95,6 @@ function TextureHandler.LoadTexture(arg1,arg2,arg3)
     glActiveTexture(activeTexID,glCallList,placeholderDL)
   else
     glActiveTexture(activeTexID,glCallList,tex.dl)
-  end
-end
-
-
---// Controls are drawn into display lists, which keep the texture a unit
---// picture had when the list was made. The engine can replace those
---// textures while the game starts, so redraw every control that shows one.
-function TextureHandler.RefreshUnitPictures()
-  for obj in pairs(unitPicUsers) do
-    if obj.Invalidate and not obj.disposed then
-      obj:Invalidate()
-    end
   end
 end
 
@@ -146,16 +139,24 @@ function TextureHandler.Update()
     gl.Texture(filename)
     gl.Texture(false)
 
-    local texture = {}
-    texture.dl = gl.CreateList(gl.Texture,filename)
-    texture.references = #objs
-    loaded[filename] = texture
+    if (filename:byte(1) == 35) then
+      preloadedUnitPics[filename] = true
+      for obj in pairs(objs) do
+        obj:Invalidate()
+      end
+      requested[filename] = nil
+    else
+      local texture = {}
+      texture.dl = gl.CreateList(gl.Texture,filename)
+      texture.references = #objs
+      loaded[filename] = texture
 
-    for obj in pairs(objs) do
-      obj:Invalidate()
+      for obj in pairs(objs) do
+        obj:Invalidate()
+      end
+
+      requested[filename] = nil
     end
-
-    requested[filename] = nil
 
     local timerEnd = spGetTimer()
     usedTime = usedTime + spDiffTimers(timerEnd,timerStart)

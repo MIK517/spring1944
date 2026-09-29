@@ -44,6 +44,7 @@ local aircraftOrder = {}
 local updateIndex = 0
 local hoveredUnitID
 local UpdateLayout
+local layoutTimer = 0
 
 --------------------------------------------------------------------------------
 --------------------------------------------------------------------------------
@@ -108,7 +109,11 @@ UpdateLayout = function()
 	-- Stay above the quick selection bar, which takes the lower half of the
 	-- left edge in the default layout.
 	local _, screenHeight = Spring.GetViewGeometry()
-	local maxRows = math.max(1, math.min(MAX_ROWS, math.floor((screenHeight/2 - TOP_OFFSET - 12) / BUTTON_SIZE)))
+	local top = math.max(TOP_OFFSET, (WG.S44SortiePanel and (WG.S44SortiePanel.GetBottom() + 4)) or 0)
+	if window.y ~= top then
+		window:SetPos(nil, top)
+	end
+	local maxRows = math.max(1, math.min(MAX_ROWS, math.floor((screenHeight/2 - top - 12) / BUTTON_SIZE)))
 	local rows = math.min(count, maxRows)
 	local columns = math.ceil(count / rows)
 	grid.columns = columns
@@ -347,6 +352,12 @@ function widget:Update()
 	local count = #aircraftOrder
 	if count == 0 then
 		return
+	end
+	-- Follow the air support panel above as it grows and shrinks.
+	layoutTimer = layoutTimer + 1
+	if layoutTimer >= 30 then
+		layoutTimer = 0
+		UpdateLayout()
 	end
 	-- One aircraft per frame is enough to keep the bars current.
 	updateIndex = (updateIndex % count) + 1

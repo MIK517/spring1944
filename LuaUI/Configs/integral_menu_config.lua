@@ -183,14 +183,18 @@ local cmdPosByAction = {
 	apc            = {pos = 1, priority = 14.5},
 	beach          = {pos = 1, priority = 15},
 }
--- Air sortie calls from radio stations (action = sortie unit name).
-local sortiePosition = {pos = 13, priority = 1}
+-- Air sortie calls from radio stations (action = sortie unit name), in
+-- their own Air tab.
+local sortiePosition = {pos = 1, priority = 1}
 
 --------------------------------------------------------------------------------
 --------------------------------------------------------------------------------
 -- Special commands
 
--- Sortie calls: shown with their stockpile ("N Ready") on the button.
+-- Sortie calls: shown with their stockpile count on the button. With the
+-- default 'sortie_interface' mod option they are called from the Air Support
+-- panel instead and hidden here.
+local hideSortieCalls = (Spring.GetModOptions().sortie_interface or "global") == "global"
 local sortieCommands = {}
 for unitDefID, ud in pairs(UnitDefs) do
 	if ud.name:find("_sortie_", 1, true) then
@@ -418,9 +422,19 @@ local commandPanels = {
 		humanName = "Orders",
 		name = "orders",
 		inclusionFunction = function(cmdID, factoryUnitDefID, forceOrdersCommand, unitMobilePanelSize)
-			return ((cmdID >= 0 or unitMobilePanelSize == 1) and not buildCategory[cmdID])
+			return ((cmdID >= 0 or unitMobilePanelSize == 1) and not buildCategory[cmdID] and not sortieCommands[cmdID])
 		end,
 		loiterable = true,
+		buttonLayoutConfig = buttonLayoutConfig.command,
+	},
+	{
+		humanName = "Air",
+		name = "sorties",
+		inclusionFunction = function(cmdID)
+			return sortieCommands[cmdID] or false
+		end,
+		loiterable = true,
+		paged = true, -- the Game Master toolbox calls every nation's sorties
 		buttonLayoutConfig = buttonLayoutConfig.command,
 	},
 	{
@@ -510,6 +524,7 @@ local s44 = {
 	cmdPosByAction = cmdPosByAction,
 	sortiePosition = sortiePosition,
 	sortieCommands = sortieCommands,
+	hideSortieCalls = hideSortieCalls,
 	canDetonateDefs = canDetonateDefs,
 	GetFactoryLayout = GetFactoryLayout,
 }
