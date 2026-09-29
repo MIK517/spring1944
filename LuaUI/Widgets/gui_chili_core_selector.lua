@@ -212,7 +212,7 @@ local defaultFacHotkeys = {
 }
 
 options_path = 'Settings/HUD Panels/Quick Selection Bar'
-options_order = {  'showCoreSelector', 'vertical', 'buttonSizeLong', 'buttonFontScale', 'background_opacity', 'allowclickthrough', 'highlightidleconsinc', 'highlightidleconsincopacity', 'monitoridlecomms','monitoridlenano', 'monitorInbuiltCons', 'leftMouseCenter', 'lblSelectionIdle', 'selectprecbomber', 'selectidlecon', 'selectidlecon_all', 'lblSelection', 'selectcomm', 'horPaddingLeft', 'horPaddingRight', 'vertPadding', 'buttonSpacing', 'minButtonSpaces', 'specSpaceOverride', 'fancySkinning', 'leftsideofscreen'}
+options_order = {  'showCoreSelector', 'vertical', 'buttonSizeLong', 'buttonFontScale', 'background_opacity', 'allowclickthrough', 'highlightidleconsinc', 'highlightidleconsincopacity', 'monitoridlecomms','monitoridlenano', 'monitorInbuiltCons', 'leftMouseCenter', 'maxFactoryTypes', 'lblSelectionIdle', 'selectprecbomber', 'selectidlecon', 'selectidlecon_all', 'lblSelection', 'selectcomm', 'horPaddingLeft', 'horPaddingRight', 'vertPadding', 'buttonSpacing', 'minButtonSpaces', 'specSpaceOverride', 'fancySkinning', 'leftsideofscreen'}
 options = {
 	showCoreSelector = {
 		name = 'Selection Bar Visibility',
@@ -306,6 +306,14 @@ options = {
 		name = 'Track constructors being built',
 		type = 'bool',
 		value = false,
+		noHotkey = true,
+	},
+	maxFactoryTypes = {
+		name = 'Factory types shown',
+		desc = 'Each type of factory gets one button; clicking it cycles through the factories of that type. Types built later than this many wait until a button is free.',
+		type = 'number',
+		value = 6,
+		min = 1, max = 16, step = 1,
 		noHotkey = true,
 	},
 	leftMouseCenter = {
@@ -1081,10 +1089,34 @@ end
 --------------------------------------------------------------------------------
 -- Factory Handling
 
-local function GetFactoryButton(parent, unitID, unitDefID, categoryOrder)
-	
+-- S:44 factories cannot be assisted, so players build several of the same
+-- kind. Instead of one button per factory (Zero-K), there is one button per
+-- factory type; clicking it cycles through the factories of that type.
+local function GetFactoryButton(parent, unitDefID, categoryOrder)
+	local unitIDs = {}
+	local cycleIndex = 0
+	local shownUnitID -- factory whose production the button shows
+
 	local function OnClick(mouse)
+		local count = #unitIDs
+		if count == 0 then
+			return
+		end
 		local alt, ctrl, meta, shift = Spring.GetModKeyState()
+		if ctrl then
+			-- Ctrl: all factories of this type.
+			Spring.SelectUnitArray(unitIDs, shift)
+			return
+		end
+		-- Next factory of this type that is not selected yet.
+		local unitID
+		for _ = 1, count do
+			cycleIndex = (cycleIndex % count) + 1
+			unitID = unitIDs[cycleIndex]
+			if not Spring.IsUnitSelected(unitID) then
+				break
+			end
+		end
 		Spring.SelectUnit(unitID, shift)
 		if mouse == ((options.leftMouseCenter.value and 1) or 3) then
 			local x, y, z = Spring.GetUnitPosition(unitID)
@@ -1130,14 +1162,19 @@ local function GetFactoryButton(parent, unitID, unitDefID, categoryOrder)
 		button.SetRepeat(repeatState)
 	end
 	
-	local oldConstructionCount, oldConstructionDefID, oldBuildProgress
-	local function UpdateTooltip(constructionCount)
-		if constructionCount == oldConstructionCount and constructionDefID == oldConstructionDefID and buildProgress == oldBuildProgress then
+	local oldTooltipKey
+	local function UpdateTooltip(constructionCount, busyCount)
+		local key = constructionCount .. "," .. busyCount .. "," .. #unitIDs .. "," .. tostring(constructionDefID) .. "," .. tostring(buildProgress) .. "," .. tostring(repeatState)
+		if key == oldTooltipKey then
 			return
 		end
-		oldConstructionCount, oldConstructionDefID, oldBuildProgress = constructionCount, constructionDefID, buildProgress
+		oldTooltipKey = key
 		
-		local tooltip = WG.Translate("interface", "factory") .. ": ".. Spring.Utilities.GetHumanName(UnitDefs[unitDefID]) .. "\n" .. WG.Translate("interface", "x_units_in_queue", {count = constructionCount})
+		local tooltip = WG.Translate("interface", "factory") .. ": ".. Spring.Utilities.GetHumanName(UnitDefs[unitDefID])
+		if #unitIDs > 1 then
+			tooltip = tooltip .. " (" .. #unitIDs .. ", " .. busyCount .. " producing)"
+		end
+		tooltip = tooltip .. "\n" .. WG.Translate("interface", "x_units_in_queue", {count = constructionCount})
 		if repeatState then
 			tooltip = tooltip .. "\255\0\255\255 (" .. WG.Translate("interface", "repeating") .. ")\008"
 		end
@@ -1145,47 +1182,77 @@ local function GetFactoryButton(parent, unitID, unitDefID, categoryOrder)
 			tooltip = tooltip .. "\n" .. WG.Translate("interface", "current_project") .. ": " .. Spring.Utilities.GetHumanName(UnitDefs[constructionDefID]) .. " (".. WG.Translate("interface", "x%_done", {x = math.floor(buildProgress*100)}) .. ")"
 		end
 		tooltip = tooltip .. standardFactoryTooltip
+		if #unitIDs > 1 then
+			tooltip = tooltip .. "\n\255\0\255\0Click again\008: next factory of this type" ..
+				"\n\255\0\255\0" .. WG.Translate("interface", "ctrl") .. "\008: all factories of this type\008"
+		end
 		
 		button.SetTooltip(tooltip)
 	end
 	
 	local externalFunctions = {
-		unitID = unitID,
+		unitID = "factype_" .. unitDefID,
+		unitDefID = unitDefID,
 		GetOrder = button.GetOrder,
 		UpdatePosition = button.UpdatePosition,
 		SetImageVisible = button.SetImageVisible,
 		UpdateFontSize = button.UpdateFontSize,
 	}
 	
+	function externalFunctions.AddUnit(unitID)
+		for i = 1, #unitIDs do
+			if unitIDs[i] == unitID then
+				return
+			end
+		end
+		unitIDs[#unitIDs + 1] = unitID
+		button.SetBottomLabel((#unitIDs > 1 and ("x" .. #unitIDs)) or "")
+	end
+	
+	-- Returns true when no factory of this type is left.
+	function externalFunctions.RemoveUnit(unitID)
+		for i = #unitIDs, 1, -1 do
+			if unitIDs[i] == unitID then
+				table.remove(unitIDs, i)
+			end
+		end
+		button.SetBottomLabel((#unitIDs > 1 and ("x" .. #unitIDs)) or "")
+		return #unitIDs == 0
+	end
+	
 	function externalFunctions.UpdateButton()
-		if not Spring.ValidUnitID(unitID) then
-			return false
+		-- Show the production of the factory furthest along; count the queue
+		-- of all of them.
+		local bestProgress, bestDefID
+		local constructionCount, busyCount = 0, 0
+		local anyRepeat = false
+		for i = #unitIDs, 1, -1 do
+			local unitID = unitIDs[i]
+			if Spring.ValidUnitID(unitID) then
+				local buildeeID = Spring.GetUnitIsBuilding(unitID)
+				if buildeeID then
+					busyCount = busyCount + 1
+					local progress = select(5, Spring.GetUnitHealth(buildeeID)) or 0
+					if (not bestProgress) or progress > bestProgress then
+						bestProgress = progress
+						bestDefID = Spring.GetUnitDefID(buildeeID)
+					end
+				end
+				anyRepeat = anyRepeat or Spring.Utilities.GetUnitRepeat(unitID)
+				local queue = Spring.GetFullBuildQueue(unitID) or {}
+				for j = 1, #queue do
+					local _, num = next(queue[j])
+					constructionCount = constructionCount + num
+				end
+			else
+				table.remove(unitIDs, i)
+			end
 		end
-		
-		-- Update progress and construction
-		local buildeeID = Spring.GetUnitIsBuilding(unitID)
-		if buildeeID then
-			local progress = select(5, Spring.GetUnitHealth(buildeeID))
-			local buildeeDefID = Spring.GetUnitDefID(buildeeID)
-			UpdateConstruction(buildeeDefID)
-			UpdateBuildProgress(progress)
-		else
-			UpdateConstruction()
-			UpdateBuildProgress(0)
-		end
-		
-		-- Update repeat
-		UpdateRepeat(Spring.Utilities.GetUnitRepeat(unitID))
-		
-		-- Update tooltip
-		local queue = Spring.GetFullBuildQueue(unitID) or {}
-		local constructionCount = 0
-		for i = 1, #queue do
-			local udid, num = next(queue[i])
-			constructionCount = constructionCount + num
-		end
-		
-		UpdateTooltip(constructionCount)
+		-- The button stays until RemoveFac() frees it (UnitDestroyed).
+		UpdateConstruction(bestDefID)
+		UpdateBuildProgress(bestProgress or 0)
+		UpdateRepeat(anyRepeat)
+		UpdateTooltip(constructionCount, busyCount)
 		return true
 	end
 	
@@ -1608,35 +1675,86 @@ local function RemoveComm(unitID)
 	buttonList.RemoveButton(unitID)
 end
 
+local factoryGroups = {} -- unitDefID -> factory type button
+local factoryUnitDefIDs = {} -- unitID -> unitDefID
+-- Factory types beyond options.maxFactoryTypes, oldest first:
+-- {unitDefID = , unitIDs = {}}. They get a button when one is freed, so
+-- building every yard in the game cannot flood the bar.
+local pendingFactoryTypes = {}
+
+local function CreateFactoryTypeButton(unitDefID, unitIDs)
+	local group = GetFactoryButton(buttonHolder, unitDefID, factoryIndex)
+	factoryIndex = factoryIndex + 1
+	factoryGroups[unitDefID] = group
+	factoryList[#factoryList + 1] = group
+	for i = 1, #unitIDs do
+		group.AddUnit(unitIDs[i])
+	end
+	group.UpdateButton()
+	buttonList.AddButton(group.unitID, group)
+end
+
 local function AddFac(unitID, unitDefID)
-	if buttonList.GetButton(unitID) then
+	if factoryUnitDefIDs[unitID] then
 		return
 	end
-	
-	local button = GetFactoryButton(buttonHolder, unitID, unitDefID, factoryIndex)
-	factoryIndex = factoryIndex + 1
-	
-	factoryList[#factoryList + 1] = button
-	
-	buttonList.AddButton(unitID, button)
+	factoryUnitDefIDs[unitID] = unitDefID
+	local group = factoryGroups[unitDefID]
+	if group then
+		group.AddUnit(unitID)
+		group.UpdateButton()
+		return
+	end
+	for i = 1, #pendingFactoryTypes do
+		if pendingFactoryTypes[i].unitDefID == unitDefID then
+			local unitIDs = pendingFactoryTypes[i].unitIDs
+			unitIDs[#unitIDs + 1] = unitID
+			return
+		end
+	end
+	if #factoryList < options.maxFactoryTypes.value then
+		CreateFactoryTypeButton(unitDefID, {unitID})
+	else
+		pendingFactoryTypes[#pendingFactoryTypes + 1] = {unitDefID = unitDefID, unitIDs = {unitID}}
+	end
 end
 
 local function RemoveFac(unitID)
-	local i = 1
-	local removing = false
-	local facCount = #factoryList
-	for i = 1, facCount do
-		if removing then
-			factoryList[i - 1] = factoryList[i]
-		elseif factoryList[i].unitID == unitID then
-			removing = true
+	local unitDefID = factoryUnitDefIDs[unitID]
+	if not unitDefID then
+		return
+	end
+	factoryUnitDefIDs[unitID] = nil
+	for i = 1, #pendingFactoryTypes do
+		local pending = pendingFactoryTypes[i]
+		if pending.unitDefID == unitDefID then
+			for j = #pending.unitIDs, 1, -1 do
+				if pending.unitIDs[j] == unitID then
+					table.remove(pending.unitIDs, j)
+				end
+			end
+			if #pending.unitIDs == 0 then
+				table.remove(pendingFactoryTypes, i)
+			end
+			return
 		end
 	end
-	if removing then
-		factoryList[facCount] = nil
+	local group = factoryGroups[unitDefID]
+	if not (group and group.RemoveUnit(unitID)) then
+		return
 	end
-	
-	buttonList.RemoveButton(unitID)
+	-- Last factory of this type: free its button for a waiting type.
+	factoryGroups[unitDefID] = nil
+	for i = #factoryList, 1, -1 do
+		if factoryList[i] == group then
+			table.remove(factoryList, i)
+		end
+	end
+	buttonList.RemoveButton(group.unitID)
+	local nextType = table.remove(pendingFactoryTypes, 1)
+	if nextType then
+		CreateFactoryTypeButton(nextType.unitDefID, nextType.unitIDs)
+	end
 end
 
 -------------------------------------------------------------------------------
@@ -1771,6 +1889,9 @@ end
 
 local function ClearData()
 	factoryList = {}
+	factoryGroups = {}
+	factoryUnitDefIDs = {}
+	pendingFactoryTypes = {}
 	commanderList = {}
 	idleCons = {}
 	idleTransports = {}
