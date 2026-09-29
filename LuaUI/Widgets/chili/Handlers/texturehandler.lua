@@ -99,6 +99,17 @@ function TextureHandler.LoadTexture(arg1,arg2,arg3)
 end
 
 
+--// gl.TextureInfo() loads a texture it has not seen, and a unit picture
+--// loaded while a display list is recorded stays empty. Controls call this
+--// instead; it only asks the engine once the picture is loaded.
+function TextureHandler.GetTextureInfo(filename)
+  if (type(filename) == 'string') and (filename:byte(1) == 35) and not preloadedUnitPics[filename] then
+    return nil
+  end
+  return gl.TextureInfo(filename)
+end
+
+
 function TextureHandler.DeleteTexture(filename)
   local tex = loaded[filename]
   if (tex) then
