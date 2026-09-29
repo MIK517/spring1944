@@ -2665,7 +2665,11 @@ local function GetMainPanel(parent, width, height)
 		holderWidth = holderWidth + sliderWidth + 2
 	end
 	
-	-- No language chooser: Spring: 1944 is English only.
+	-- No language chooser: Spring: 1944 is English only. Its 26 pixels are
+	-- kept: the width sums below are a few pixels short of what the stack
+	-- panel uses (item margins), and without this slack the Lobby button
+	-- wraps onto a hidden second row.
+	holderWidth = holderWidth + 26
 	
 	stackChildren[#stackChildren + 1] = Button:New{
 		name = 'subMenuButton',
