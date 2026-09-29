@@ -9,7 +9,7 @@ function widget:GetInfo()
         date      = "30-09-2020",
         license   = "GNU GPL v2 or later",
         version   = "1.0",
-        layer     = -999,
+        layer     = 1001, -- after the Chili Framework (1000), whose WG.Chili it extends
         enabled   = true,
         handler   = true,
         api       = true,
@@ -38,7 +38,12 @@ function OptimumFontSize(font, txt, w, h)
     -- afterwards -- which is why a single empty button caption could black out
     -- most of the interface.
     if (not txt) or (txt == "") then
-        return max(MIN_FONT_SIZE, font.size)
+        return max(MIN_FONT_SIZE, font.size or MIN_FONT_SIZE)
+    end
+    -- Controls created with noFont (the default for bare Zero-K Chili
+    -- containers) hand over a plain table that cannot measure text.
+    if not (font.GetTextWidth and font.GetTextHeight) then
+        return max(MIN_FONT_SIZE, font.size or 12)
     end
 
     local tw = font:GetTextWidth(txt)
