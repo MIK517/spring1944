@@ -1,0 +1,379 @@
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+
+function widget:GetInfo()
+  return {
+    name      = "Chili EndGame Window",
+    desc      = "v0.005 Chili EndGame Window. Shows the result and statistics, and returns to the lobby.",
+    author    = "CarRepairer",
+    date      = "2013-09-05",
+    license   = "GNU GPL, v2 or later",
+    layer     = 0,
+    enabled   = true,
+  }
+end
+
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+
+-- Spring aliases
+local spSendCommands   = Spring.SendCommands
+local echo             = Spring.Echo
+local GetGameSeconds   = Spring.GetGameSeconds
+local spGetTeamInfo    = Spring.GetTeamInfo
+local spGetGameseconds = Spring.GetGameSeconds
+local spGetPlayerInfo  = Spring.GetPlayerInfo
+local floor = math.floor
+
+-- Chili classes
+local Chili
+local Image
+local Button
+local Checkbox
+local Window
+local Panel
+local ScrollPanel
+local StackPanel
+local Label
+local Line
+local screen0
+local color2incolor
+local incolor2color
+
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+
+-- Chili objects
+local window_endgame
+local statsPanel
+local statsSubPanel
+local statsButton
+local exitButton
+
+-- Flags and timers
+local spec
+local showingTab
+local endgame_caption
+local endgame_fontcolor
+local gameEnded
+local showEndgameWindowTimer
+local myPlayerID = Spring.GetMyPlayerID()
+local updateFlag = true
+
+-- Constants and parameters
+local endgameWindowDelay = 2
+local B_HEIGHT = 40
+local SELECT_BUTTON_COLOR = {0.98, 0.48, 0.26, 0.85}
+local SELECT_BUTTON_FOCUS_COLOR = {0.98, 0.48, 0.26, 0.85}
+local BUTTON_COLOR
+local BUTTON_FOCUS_COLOR
+
+
+local teamNames = {}
+local teamColors = {}
+
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+--options
+
+options_path = 'Settings/HUD Panels/Stats Graph'
+options_order = {'togglestatsgraph'}
+options = {
+	togglestatsgraph = { type = 'button',
+		name = 'Toggle stats graph',
+		desc = 'Shows and hides the statistics graph.',
+		action = 'togglestatsgraph',
+		dontRegisterAction = true,
+	},
+}
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+--utilities
+
+local function SetTeamNamesAndColors()
+	for _,teamID in ipairs(Spring.GetTeamList()) do
+		local _,leader,isDead,isAI,_,allyTeamID = Spring.GetTeamInfo(teamID, false)
+		if isAI then
+			local skirmishAIID, name, hostingPlayerID, shortName, version, options = Spring.GetAIInfo(teamID)
+			teamNames[teamID] = name
+		else
+			local name = Spring.GetPlayerInfo(leader, false)
+			teamNames[teamID] = name
+		end
+		teamColors[teamID] = Chili.color2incolor(Spring.GetTeamColor(teamID))
+	end
+end
+
+local function SetButtonSelected(button, isSelected)
+	if isSelected then
+		button.backgroundColor = SELECT_BUTTON_COLOR
+		button.focusColor = SELECT_BUTTON_FOCUS_COLOR
+	else
+		button.backgroundColor = BUTTON_COLOR
+		button.focusColor = BUTTON_FOCUS_COLOR
+	end
+	button:Invalidate()
+end
+
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+-- Spring: 1944 has no awards or APM tracking; only the statistics tab and the
+-- exit button are kept.
+
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+--show, hide, and toggle
+
+local function ToggleStatsGraph(wantedState)
+	local currentState = window_endgame.visible
+	if wantedState == nil then
+		wantedState = not currentState
+	end
+
+	if currentState == wantedState then
+		return
+	end
+
+	if currentState == true then
+		window_endgame:Hide()
+		widgetHandler:RemoveCallIn("GameFrame")
+	else
+		local button = statsSubPanel.buttonPressed or 1
+		if statsSubPanel then statsSubPanel.graphButtons[button].OnClick[1](statsSubPanel.graphButtons[button]) end
+		window_endgame:Show()
+		widgetHandler:UpdateCallIn("GameFrame")
+	end
+end
+
+local function ShowStats()
+	if not statsSubPanel then
+		echo 'Stats Panel not ready yet.'
+		return
+	end
+
+	local button = statsSubPanel.buttonPressed or 1
+	statsSubPanel.graphButtons[button].OnClick[1](statsSubPanel.graphButtons[button])
+
+	statsPanel:Show()
+	SetButtonSelected(statsButton, true)
+	showingTab = 'stats'
+end
+
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+--setup
+
+local function SetupControls()
+	window_endgame = Window:New{
+		parent = screen0,
+		classname = "main_window",
+		name = "GameOver",
+		caption = "",
+		textColor = {0.5,0.5,0.5,1},
+		objectOverrideFont = WG.GetFont(50),
+		x = '20%',
+		y = '16%',
+		width  = '60%',
+		height = '62%',
+		--autosize   = true;
+		draggable = true,
+		resizable = true,
+		minWidth=500;
+		minHeight=400;
+	}
+	ToggleStatsGraph(false)
+
+	statsPanel = ScrollPanel:New{
+		parent = window_endgame,
+		x = 10; y = 10;
+		noFont = true,
+		height = -20; width = -20;
+		backgroundColor  = {1,1,1,1},
+		borderColor = {1,1,1,1},
+	}
+
+	statsButton = Button:New{
+		parent = window_endgame;
+		caption="Statistics",
+		x=9, y=7,
+		objectOverrideFont = WG.GetFont(),
+		height=B_HEIGHT;
+		OnClick = {
+			ShowStats
+		};
+	}
+	BUTTON_COLOR = statsButton.backgroundColor
+	BUTTON_FOCUS_COLOR = statsButton.focusColor
+
+	exitButton = Button:New{
+		x = -169, -- This is is a high class nonsense here
+		y = 7,
+		width = 160,
+		height = B_HEIGHT,
+		caption = "Exit to Lobby",
+		objectOverrideFont = WG.GetFont(18),
+		OnClick = {
+			function()
+				local menu = Spring.GetMenuName and Spring.GetMenuName() or ""
+				if WG.S44Debug then
+					WG.S44Debug.Log("lobby", "endgame exit button, menu", menu)
+				end
+				if menu ~= "" then
+					Spring.Reload("")
+				else
+					Spring.SendCommands("quit","quitforce")
+				end
+			 end
+		},
+		parent   = window_endgame,
+	}
+end
+
+local function SetEndgameCaption(winners)
+	local gaiaAllyTeamID = select(6, Spring.GetTeamInfo(Spring.GetGaiaTeamID(), false))
+	if #winners > 1 then
+		if spec then
+			endgame_caption = "Game over!"
+			endgame_fontcolor = {1,1,1,1}
+		else
+			local i_win = false
+			for i = 1, #winners do
+				if (winners[i] == Spring.GetMyAllyTeamID()) then
+					i_win = true
+				end
+			end
+
+			if i_win then
+				endgame_caption = "Victory!"
+				endgame_fontcolor = {0,1,0,1}
+			else
+				endgame_caption = "Defeat!"
+				endgame_fontcolor = {1,0,0,1}
+			end
+		end
+	elseif #winners == 1 then
+		local winnerTeamName = Spring.GetGameRulesParam("allyteam_long_name_"  .. winners[1]) or "Team " .. winners[1]
+		if string.len(winnerTeamName) > 10 then
+			winnerTeamName = Spring.GetGameRulesParam("allyteam_short_name_" .. winners[1]) or "Team " .. winners[1]
+		end
+		if spec then
+			if (winners[1] == gaiaAllyTeamID) then
+				endgame_caption = "Draw!"
+				endgame_fontcolor = {1,1,1,1}
+			else
+				endgame_caption = (winnerTeamName .. " wins!")
+				endgame_fontcolor = {1,1,1,1}
+			end
+		elseif (winners[1] == Spring.GetMyAllyTeamID()) then
+			endgame_caption = "Victory!"
+			endgame_fontcolor = {0,1,0,1}
+		elseif (winners[1] == gaiaAllyTeamID) then
+			endgame_caption = "Draw!"
+			endgame_fontcolor = {1,1,0,1}
+		else
+			endgame_caption = "Defeat!" -- could somehow add info on who won (eg. for FFA) but as-is it won't fit
+			endgame_fontcolor = {1,0,0,1}
+		end
+	end
+end
+
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+--callins
+
+local function StartEndgameTimer (delay)
+	if Spring.GetModOptions().singleplayercampaignbattleid then
+		-- SP has its own endgame thing
+		return
+	end
+
+	gameEnded = true
+	showEndgameWindowTimer = endgameWindowDelay
+	widgetHandler:UpdateCallIn("Update")
+end
+
+function widget:Initialize()
+	if (not WG.Chili) then
+		widgetHandler:RemoveWidget()
+		return
+	end
+	Chili = WG.Chili
+	Image = Chili.Image
+	Button = Chili.Button
+	Checkbox = Chili.Checkbox
+	Window = Chili.Window
+	Panel = Chili.Panel
+	ScrollPanel = Chili.ScrollPanel
+	StackPanel = Chili.StackPanel
+	Label = Chili.Label
+	Line = Chili.Line
+	screen0 = Chili.Screen0
+	color2incolor = Chili.color2incolor
+	incolor2color = Chili.incolor2color
+
+	SetTeamNamesAndColors()
+	spec = Spring.GetSpectatingState()
+	Spring.SendCommands("endgraph 0")
+
+	-- Create the window and configure it to display mid-game stats
+	-- but don't display it yet; wait until toggled on or game over
+	SetupControls()
+	statsSubPanel = WG.MakeStatsPanel()
+	if statsSubPanel then
+		statsPanel:AddChild(statsSubPanel)
+	end
+	
+	statsButton:Hide()
+	exitButton:Hide()
+	ShowStats()
+
+	widgetHandler:RemoveCallIn("Update")
+	widgetHandler:RemoveCallIn("GameFrame")
+	if Spring.IsGameOver() then
+		window_endgame.caption = "Game aborted"
+		StartEndgameTimer(1)
+	end
+
+	widgetHandler:AddAction("togglestatsgraph", ToggleStatsGraph, nil, 'tp')
+
+end
+
+function widget:GameOver(winners)end
+
+function widget:GameOver(winners)
+	SetEndgameCaption(winners)
+	StartEndgameTimer(endgameWindowDelay)
+end
+
+function widget:Update(dt)
+	showEndgameWindowTimer = showEndgameWindowTimer - dt
+	if showEndgameWindowTimer > 0 then
+		return
+	end
+	local screenWidth, screenHeight = Spring.GetViewGeometry()
+	window_endgame:SetPos(screenWidth*0.2,screenHeight*0.19,screenWidth*0.6,screenHeight*0.62)
+	statsPanel:SetPosRelative(10, 50, -(10+10), -(50+10))
+	statsSubPanel.graphButtons[1].OnClick[1](statsSubPanel.graphButtons[1])
+	statsButton:Show()
+	exitButton:Show()
+
+	window_endgame.tooltip = ""
+	window_endgame.caption = endgame_caption
+	window_endgame.font.color = endgame_fontcolor
+
+	ShowStats()
+	ToggleStatsGraph(true)
+	widgetHandler:RemoveCallIn("Update")
+end
+
+function widget:GameFrame(f)
+	-- Redraw the currently-displayed stats graph every fifteen seconds
+	if f%450 == 1 and showingTab == 'stats' then
+		local button = statsSubPanel.buttonPressed or 1
+		statsSubPanel.graphButtons[button].OnClick[1](statsSubPanel.graphButtons[button])
+	end
+end
+
+function widget:Shutdown()
+	widgetHandler:RemoveAction("togglestatsgraph")
+end

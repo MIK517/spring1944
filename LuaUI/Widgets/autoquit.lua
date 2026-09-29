@@ -2,10 +2,10 @@
 ----------------------------------------------------------------
 -- global variables
 ----------------------------------------------------------------
-local versionNumber = "v1.2"
-local delay = 30
+local versionNumber = "v1.3"
+local delay = 10
 local endTime
-local mx,my
+local mx,my,key
 
 ----------------------------------------------------------------
 -- speedups
@@ -39,19 +39,33 @@ end
 function widget:GameOver()
   endTime = GetTimer()
   mx,my = GetMouseState()
+  key=nil
   Echo("<autoquit> Automatically exiting in " .. delay .. " seconds. Move mouse to cancel.")
 end
 
 function widget:Update(dt)
   if endTime then
     local nmx,nmy = GetMouseState()
-    if nmx~=mx or nmy~=my then
+    if nmx~=mx or nmy~=my or key then
       Echo("<autoquit> Autoquit canceled.")
       endTime = false
       -- widgetHandler:RemoveWidget()
     elseif DiffTimers(GetTimer(), endTime) > delay then
       Echo("<autoquit> Autoquit sending quit command.")
-      SendCommands("quitforce")
+	  if WG.S44Debug then
+		WG.S44Debug.Log("lobby", "autoquit, menu", Spring.GetMenuName and Spring.GetMenuName())
+	  end
+	  -- Launched from a lobby running in the engine (e.g. the Zero-K launcher):
+	  -- return to it instead of closing the game.
+	  if Spring.GetMenuName and Spring.GetMenuName() ~= "" then
+		Spring.Reload("")
+	  else
+		SendCommands("quitforce")
+	  end
     end
   end
+end
+
+function widget:KeyPress(k)
+  key=k
 end
