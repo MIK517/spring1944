@@ -104,10 +104,16 @@ options = {
 local function Format(value)
 	value = value or 0
 	local absValue = math.abs(value)
-	if absValue >= 1000000000 then
-		return strFormat("%.3gG", value / 1000000000)
-	elseif absValue >= 1000000 then
-		return strFormat("%.3gM", value / 1000000)
+	if absValue >= 1000000 then
+		local suffix, divisor = "M", 1000000
+		if absValue >= 1000000000 then
+			suffix, divisor = "G", 1000000000
+		end
+		local short = value / divisor
+		if math.abs(short) < 10 then
+			return strFormat("%.1f", short) .. suffix
+		end
+		return strFormat("%d", short) .. suffix
 	elseif absValue >= 100000 then
 		return strFormat("%dk", value / 1000)
 	elseif absValue >= 10000 then

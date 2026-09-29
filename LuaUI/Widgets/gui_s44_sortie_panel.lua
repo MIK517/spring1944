@@ -37,6 +37,7 @@ local spGetSpectatingState = Spring.GetSpectatingState
 
 local BUTTON_SIZE = 50
 local TITLE_HEIGHT = 16
+local MIN_WIDTH = 96 -- room for the title
 local MAX_COLUMNS = 8
 local UPDATE_PERIOD = 0.25
 
@@ -295,7 +296,7 @@ UpdatePanel = function()
 		local rows = math.ceil(#shown / MAX_COLUMNS)
 		grid.columns = columns
 		grid.rows = rows
-		window:SetPos(nil, nil, columns * BUTTON_SIZE + 12, rows * BUTTON_SIZE + TITLE_HEIGHT + 12)
+		window:SetPos(nil, nil, math.max(MIN_WIDTH, columns * BUTTON_SIZE + 12), rows * BUTTON_SIZE + TITLE_HEIGHT + 12)
 	end
 	for i = 1, #shown do
 		local button = buttons[shown[i].entry.unitDefID]

@@ -3044,11 +3044,25 @@ local function GetSelectionWindow()
 		multiUnitDisplay.LanguageChange()
 	end
 
+	-- The group stats column sits at the right of the panel. A single unit's
+	-- details take the left part; on a narrow panel they would overlap, so
+	-- the column is left out then.
+	local function UpdateStatsColumnForSingleUnit(single)
+		local show = options.showgroupinfo.value
+		if single then
+			local scale = options.selectionScale.value
+			local needed = GetMultiIconScale() + math.floor(RIGHT_WIDTH * scale + 0.5) + GROUP_STATS_WIDTH + 20
+			show = show and (mainPanel.width >= needed)
+		end
+		selectionStatsDisplay.SetVisibile(show)
+	end
+	
 	function externalFunctions.ShowSingleUnit(unitID, unitDefID)
 		singleUnitID, singleUnitDefID = unitID, unitDefID or spGetUnitDefID(unitID)
 		singleUnitDisplay.SetDisplay(unitID, singleUnitDefID)
 		singleUnitDisplay.SetVisible(true)
 		multiUnitDisplay.SetUnitDisplay()
+		UpdateStatsColumnForSingleUnit(true)
 		selectionStatsDisplay.ChangeSelection({unitID})
 	end
 	
@@ -3056,6 +3070,7 @@ local function GetSelectionWindow()
 		singleUnitID = nil
 		multiUnitDisplay.SetUnitDisplay(newSelection)
 		singleUnitDisplay.SetVisible(false)
+		UpdateStatsColumnForSingleUnit(false)
 		selectionStatsDisplay.ChangeSelection(newSelection)
 	end
 	
