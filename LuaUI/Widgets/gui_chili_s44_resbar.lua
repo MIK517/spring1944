@@ -104,7 +104,11 @@ options = {
 local function Format(value)
 	value = value or 0
 	local absValue = math.abs(value)
-	if absValue >= 100000 then
+	if absValue >= 1000000000 then
+		return strFormat("%.3gG", value / 1000000000)
+	elseif absValue >= 1000000 then
+		return strFormat("%.3gM", value / 1000000)
+	elseif absValue >= 100000 then
 		return strFormat("%dk", value / 1000)
 	elseif absValue >= 10000 then
 		return strFormat("%.1fk", value / 1000)
@@ -157,6 +161,7 @@ local function GetResourcePanel(parent, resource, x, image, color, fancySkin)
 		bottom = 0,
 		padding = {4, 3, 4, 3},
 		backgroundColor = {1, 1, 1, options.opacity.value},
+		noClickThrough = true,
 		OnMouseDown = {OpenOptionsOnSpaceClick},
 	}
 	panel.holder = holder
@@ -181,6 +186,8 @@ local function GetResourcePanel(parent, resource, x, image, color, fancySkin)
 		value = 0,
 		max = 1,
 		caption = "",
+		-- Chili only sends mouse events to controls that take clicks.
+		noClickThrough = true,
 		objectOverrideFont = WG.GetSpecialFont(fontSize - 2, "s44res_bar", {
 			outline = true, color = {0.9, 0.9, 0.9, 0.95}, outlineWidth = 2, outlineWeight = 2,
 		}),

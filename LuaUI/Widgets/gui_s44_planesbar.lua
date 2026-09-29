@@ -18,6 +18,7 @@ end
 local BUTTON_SIZE = 56
 local BAR_HEIGHT = 5
 local MAX_ROWS = 8
+local TOP_OFFSET = 60 -- below the top bar, in the top-left corner Zero-K's layout leaves free
 
 local GetUnitDefID       = Spring.GetUnitDefID
 local GetUnitHealth      = Spring.GetUnitHealth
@@ -104,8 +105,12 @@ UpdateLayout = function()
 		window:SetVisibility(false)
 		return
 	end
-	local rows = math.min(count, MAX_ROWS)
-	local columns = math.ceil(count / MAX_ROWS)
+	-- Stay above the quick selection bar, which takes the lower half of the
+	-- left edge in the default layout.
+	local _, screenHeight = Spring.GetViewGeometry()
+	local maxRows = math.max(1, math.min(MAX_ROWS, math.floor((screenHeight/2 - TOP_OFFSET - 12) / BUTTON_SIZE)))
+	local rows = math.min(count, maxRows)
+	local columns = math.ceil(count / rows)
 	grid.columns = columns
 	grid.rows = rows
 	local width = columns * BUTTON_SIZE + 12
@@ -286,9 +291,9 @@ function widget:Initialize()
 	window = Chili.Window:New{
 		parent = Chili.Screen0,
 		name = "S44AircraftBar",
-		dockable = true,
-		right = 0,
-		y = math.floor(screenHeight * 0.3),
+		dockable = false,
+		x = 0,
+		y = TOP_OFFSET,
 		width = BUTTON_SIZE + 12,
 		height = BUTTON_SIZE + 12,
 		padding = {6, 6, 6, 6},

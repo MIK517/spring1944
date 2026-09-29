@@ -611,12 +611,25 @@ local function Format(amount, displaySign, longMult)
 			else
 				formatted = strFormat("%.1f", amount / 1000) .. "k"
 			end
-		else
+		elseif absAmount < 1000000 then
 			if displaySign then
 				formatted = strFormat("%+d", amount / 1000) .. "k"
 			else
 				formatted = strFormat("%d", amount / 1000) .. "k"
 			end
+		else
+			-- Large values (e.g. the game master toolbox) need a short form
+			-- to fit next to the unit picture.
+			local suffix, divisor = "M", 1000000
+			if absAmount >= 1000000000 then
+				suffix, divisor = "G", 1000000000
+			end
+			local value = amount / divisor
+			local fmt = (math.abs(value) < 10 and "%.1f") or "%d"
+			if displaySign then
+				fmt = "%+" .. fmt:sub(2)
+			end
+			formatted = strFormat(fmt, value) .. suffix
 		end
 	else
 		formatted = amount .. ""

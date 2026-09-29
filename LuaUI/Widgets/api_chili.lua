@@ -162,6 +162,28 @@ function widget:DrawGenesis()
 	gl.Color(1,1,1,1)
 end
 
+-- Unit build pictures can be replaced by the engine while the game starts
+-- (see TextureHandler.RefreshUnitPictures); redraw them a few times early on.
+local unitPicRefreshTimes = {1, 3, 10}
+local unitPicRefreshIndex = 1
+local unitPicTimer = 0
+
+function widget:Update(dt)
+	local refreshTime = unitPicRefreshTimes[unitPicRefreshIndex]
+	if not refreshTime then
+		return
+	end
+	unitPicTimer = unitPicTimer + dt
+	if unitPicTimer >= refreshTime then
+		unitPicRefreshIndex = unitPicRefreshIndex + 1
+		th.RefreshUnitPictures()
+	end
+end
+
+function widget:GameStart()
+	th.RefreshUnitPictures()
+end
+
 
 function widget:IsAbove(x,y)
 	if WG.uiScale and WG.uiScale ~= 1 then

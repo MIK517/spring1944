@@ -28,6 +28,7 @@ local weakMetaTable = {__mode="k"}
 
 local loaded = {}
 local requested = {}
+local unitPicUsers = setmetatable({}, weakMetaTable)
 
 local placeholderFilename = theme.skin.icons.imageplaceholder
 local placeholderDL = gl.CreateList(gl.Texture,CHILI_DIRNAME .. "skins/default/empty.png")
@@ -76,6 +77,9 @@ function TextureHandler.LoadTexture(arg1,arg2,arg3)
   --// Unit build pictures ("#unitDefID") are bound directly: a display list
   --// made while the game is starting can keep a stale texture (drawn white).
   if (type(filename) == 'string') and (filename:byte(1) == 35) then
+    if obj then
+      unitPicUsers[obj] = true
+    end
     glActiveTexture(activeTexID,glTexture,filename)
     return
   end
@@ -86,6 +90,18 @@ function TextureHandler.LoadTexture(arg1,arg2,arg3)
     glActiveTexture(activeTexID,glCallList,placeholderDL)
   else
     glActiveTexture(activeTexID,glCallList,tex.dl)
+  end
+end
+
+
+--// Controls are drawn into display lists, which keep the texture a unit
+--// picture had when the list was made. The engine can replace those
+--// textures while the game starts, so redraw every control that shows one.
+function TextureHandler.RefreshUnitPictures()
+  for obj in pairs(unitPicUsers) do
+    if obj.Invalidate and not obj.disposed then
+      obj:Invalidate()
+    end
   end
 end
 
