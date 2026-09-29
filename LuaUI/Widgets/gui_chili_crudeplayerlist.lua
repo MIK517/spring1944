@@ -421,8 +421,14 @@ local function GetUserControls(playerID, teamID, allyTeamID, isAiTeam, isDead, p
 		height = options.text_height.value - 1,
 		parent = userControls.mainControl,
 		caption = "",
-		tooltip = "Double click to share the units you have selected to this player.",
+		tooltip = "Click to give Command Points, Logistics or units to this player.\nDouble click to give the units you have selected.",
 		padding ={0,0,0,0},
+		OnClick = {function(self)
+			-- S:44 share dialog, with this player chosen.
+			if WG.S44ShareDialog then
+				WG.S44ShareDialog.Open(userControls.entryData.teamID)
+			end
+		end, },
 		OnDblClick = {function(self)
 			ShareUnits(userControls.entryData.name, userControls.entryData.teamID)
 		end, },
