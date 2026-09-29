@@ -16,11 +16,6 @@ end
 --------------------------------------------------------------------------------
 --------------------------------------------------------------------------------
 
-local ecoTex     = ":n:bitmaps/icons/frame_eco.png"
-local consTex    = ":n:bitmaps/icons/frame_cons.png"
-local unitTex    = ":n:bitmaps/icons/frame_unit.png"
-local diffTex    = ":n:bitmaps/icons/frame_diff.png"
-local frameTex   = ":n:bitmaps/icons/frame_slate.png"
 
 Spring.Utilities = Spring.Utilities or {}
 VFS.Include("LuaRules/Utilities/unitDefReplacements.lua")
@@ -31,21 +26,10 @@ VFS.Include("LuaRules/Utilities/rulesParam.lua")
 -- Build icons
 --------------------------------------------------------------------------------
 
+-- Zero-K draws a category frame over build pictures; S:44's build pictures
+-- are used as they are.
 local function GetBuildIconFrame(udef)
-	local cp = udef.customParams
-	if udef.isMobileBuilder then
-		return consTex
-	elseif (udef.isBuilder or udef.isFactory) then
-		return consTex
-	elseif (udef.weapons[1] and udef.isBuilding) then
-		return unitTex
-	elseif (cp.income_energy or cp.metal_extractor_mult or cp.windgen) then
-		return ecoTex
-	elseif ((udef.weapons[1] or udef.canKamikaze) and not cp.unarmed) then
-		return unitTex
-	else
-		return diffTex
-	end
+	return nil
 end
 
 local function GetSquareBuildTexture(udef)
