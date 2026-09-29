@@ -20,11 +20,13 @@ local SetUnitRulesParam = Spring.SetUnitRulesParam
 -- variables
 local satchelIDs = {}
 
+-- GetUnitRulesParam returns no value at all (not even nil) when the builder
+-- has no ammo parameter; the extra parentheses make that a nil for tonumber.
 function gadget:UnitCreated(unitID, unitDefID, unitTeam, builderID)
 	if satchelIDs[unitDefID] then
 		-- satchel can be created without being built: /give all
 		if builderID then
-			local ammoLevel = tonumber(GetUnitRulesParam(builderID, "ammo")) or 0
+			local ammoLevel = tonumber((GetUnitRulesParam(builderID, "ammo"))) or 0
 			SetUnitRulesParam(builderID, "ammo",	ammoLevel - 1)
 		end
 	end
@@ -32,7 +34,7 @@ end
 
 function gadget:AllowUnitCreation(unitDefID, builderID)
 	if satchelIDs[unitDefID] and builderID then
-		local ammoLevel = tonumber(GetUnitRulesParam(builderID, "ammo")) or 0
+		local ammoLevel = tonumber((GetUnitRulesParam(builderID, "ammo"))) or 0
 		return ammoLevel > 0
 	end
 	return true
