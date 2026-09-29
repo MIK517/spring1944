@@ -354,27 +354,17 @@ local function AddWeaponStats(grid, ud)
 	end
 end
 
-local function AddBuildOptions(parent, y, ud, width)
-	local buildOptions = ud.buildOptions
-	if not (options.showBuildOptions.value and buildOptions and #buildOptions > 0) then
-		return y
-	end
-	local shown = {}
-	for i = 1, #buildOptions do
-		local bud = UnitDefs[buildOptions[i]]
-		-- Morph pseudo units are an implementation detail.
-		if bud and not bud.name:find("_morph_", 1, true) then
-			shown[#shown + 1] = bud
-		end
-	end
-	if #shown == 0 then
+-- A titled row of unit pictures; clicking one opens its stats.
+-- entries = {{ud = unitDef, count = n or nil, text = extra tooltip or nil}, ...}
+local function AddUnitIconSection(parent, y, title, entries, width)
+	if #entries == 0 then
 		return y
 	end
 	Chili.Label:New{
 		parent = parent,
 		x = 0,
 		y = y + 6,
-		caption = "Builds",
+		caption = title,
 		objectOverrideFont = WG.GetSpecialFont(13, "s44stats_header", {
 			color = COLOR_HEADER, outline = true, outlineWidth = 2, outlineWeight = 2,
 		}),
@@ -382,27 +372,154 @@ local function AddBuildOptions(parent, y, ud, width)
 	y = y + 6 + ROW_HEIGHT + 4
 	local iconSize = 48
 	local columns = math.max(1, math.floor((width - 30) / iconSize))
-	for i = 1, #shown do
-		local bud = shown[i]
+	for i = 1, #entries do
+		local entry = entries[i]
+		local bud = entry.ud
 		local col = (i - 1) % columns
 		local row = math.floor((i - 1) / columns)
-		Chili.Image:New{
+		local tooltip = Spring.Utilities.GetHumanName(bud) .. " - " .. Spring.Utilities.GetDescription(bud)
+		if entry.count then
+			tooltip = entry.count .. " x " .. tooltip
+		end
+		if entry.text then
+			tooltip = tooltip .. "\n" .. entry.text
+		end
+		local image = Chili.Image:New{
 			parent = parent,
 			x = col * iconSize,
 			y = y + row * iconSize,
 			width = iconSize - 2,
 			height = iconSize - 2,
 			file = "#" .. bud.id,
-			tooltip = Spring.Utilities.GetHumanName(bud) .. " - " .. Spring.Utilities.GetDescription(bud) ..
-				"\n" .. Num(bud.metalCost) .. " Command" ..
-				"\n\255\1\255\1Click\255\255\255\255: show stats",
+			tooltip = tooltip .. "\n\255\1\255\1Click\255\255\255\255: show stats",
 			OnClick = {function()
 				local mx, my = Spring.GetMouseState()
 				WG.MakeStatsWindow(bud, mx, my)
 			end},
 		}
+		if entry.count and entry.count > 1 then
+			-- Chili draws the first child on top.
+			Chili.Label:New{
+				parent = image,
+				right = 2,
+				bottom = 0,
+				width = iconSize,
+				height = 16,
+				align = "right",
+				caption = "x" .. entry.count,
+				objectOverrideFont = WG.GetSpecialFont(14, "s44stats_count", {outline = true, outlineWidth = 3, outlineWeight = 3}),
+			}
+		end
 	end
-	return y + math.ceil(#shown / columns) * iconSize
+	return y + math.ceil(#entries / columns) * iconSize
+end
+
+local function AddBuildOptions(parent, y, ud, width)
+	local buildOptions = ud.buildOptions
+	if not (options.showBuildOptions.value and buildOptions and #buildOptions > 0) then
+		return y
+	end
+	local entries = {}
+	for i = 1, #buildOptions do
+		local bud = UnitDefs[buildOptions[i]]
+		-- Morph pseudo units are an implementation detail.
+		if bud and not bud.name:find("_morph_", 1, true) then
+			entries[#entries + 1] = {ud = bud, text = Num(bud.metalCost) .. " Command"}
+		end
+	end
+	return AddUnitIconSection(parent, y, "Builds", entries, width)
+end
+
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+-- Spawners and morphs. Squads and sorties are pseudo units that spawn other
+-- units; towed guns and upgradable buildings morph into other units. Their
+-- own stats say little, so the card lists what they turn into.
+
+local squadDefs, sortieDefs, morphDefs = {}, {}, {}
+do
+	local function Load(path)
+		local ok, defs = pcall(VFS.Include, path)
+		return (ok and type(defs) == "table" and defs) or {}
+	end
+	local squads = Load("LuaRules/Configs/squad_defs_loader.lua")
+	for name, def in pairs(squads) do
+		if type(name) == "string" then
+			squadDefs[name:lower()] = def
+		end
+	end
+	for name, def in pairs(Load("LuaRules/Configs/sortie_defs.lua")) do
+		sortieDefs[name:lower()] = def
+	end
+	for name, def in pairs(Load("LuaRules/Configs/morph_defs.lua")) do
+		if type(name) == "string" then
+			morphDefs[name:lower()] = def
+		end
+	end
+end
+
+local function GetSpawnDef(ud)
+	return squadDefs[ud.name] or sortieDefs[ud.name]
+end
+
+local function GetMemberEntries(def)
+	local entries, byName = {}, {}
+	for _, name in ipairs(def.members or def) do
+		local memberDef = type(name) == "string" and UnitDefNames[name:lower()]
+		if memberDef then
+			if byName[memberDef.name] then
+				byName[memberDef.name].count = byName[memberDef.name].count + 1
+			else
+				local entry = {ud = memberDef, count = 1}
+				byName[memberDef.name] = entry
+				entries[#entries + 1] = entry
+			end
+		end
+	end
+	return entries
+end
+
+local function AddSpawnerStats(grid, ud, def)
+	grid.Header(sortieDefs[ud.name] and "Air sortie" or "Squad")
+	grid.Row("Cost:", Num(ud.metalCost) .. " Command")
+	local count = 0
+	for _, entry in ipairs(GetMemberEntries(def)) do
+		count = count + entry.count
+	end
+	grid.Row("Units:", Num(count))
+	if def.delay then
+		grid.Row("Arrives after:", Seconds(def.delay))
+	end
+end
+
+local function AddMorphs(parent, y, ud, width)
+	local def = morphDefs[ud.name]
+	if not def then
+		return y
+	end
+	local list = def.into and {def} or def
+	local entries = {}
+	local isTowed = ud.name:find("_truck$") ~= nil
+	for _, morph in ipairs(list) do
+		local intoDef = morph.into and UnitDefNames[morph.into:lower()]
+		if intoDef then
+			local text = morph.text or ""
+			if morph.time and morph.time > 0 then
+				text = text .. ((text ~= "" and "\n") or "") .. "Takes " .. Seconds(morph.time)
+			end
+			if morph.metal and morph.metal > 0 then
+				text = text .. "\nCosts " .. Num(morph.metal) .. " Command"
+			end
+			entries[#entries + 1] = {ud = intoDef, text = text ~= "" and text or nil}
+		end
+	end
+	local title = "Changes into" -- e.g. guns setting up and packing up
+	if isTowed then
+		title = "Deploys into"
+	elseif ud.isBuilding or ud.isFactory then
+		title = "Upgrades into"
+	end
+	return AddUnitIconSection(parent, y, title, entries, width)
 end
 
 local function BuildContent(parent, ud, unitID, width)
@@ -432,10 +549,17 @@ local function BuildContent(parent, ud, unitID, width)
 	local y = math.max(PIC_SIZE, lines * 15) + 8
 
 	local grid = MakeStatsGrid()
+	local spawnDef = GetSpawnDef(ud)
+	if spawnDef then
+		AddSpawnerStats(grid, ud, spawnDef)
+		y = grid.Build(parent, y)
+		return AddUnitIconSection(parent, y, "Spawns", GetMemberEntries(spawnDef), width)
+	end
 	AddGeneralStats(grid, ud, unitID)
 	AddArmourStats(grid, ud)
 	AddWeaponStats(grid, ud)
 	y = grid.Build(parent, y)
+	y = AddMorphs(parent, y, ud, width)
 	y = AddBuildOptions(parent, y, ud, width)
 	return y
 end
