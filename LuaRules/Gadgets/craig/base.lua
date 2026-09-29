@@ -235,7 +235,8 @@ local function ChainScore(target, chain)
         base_gann_inputs.unit_penetration = 0.0
         base_gann_inputs.unit_range = 0.0
 
-        for _, member in ipairs(squadDefs[unitDef.name].members) do
+        -- Some squad defs are empty placeholders (e.g. ger_all).
+        for _, member in ipairs(squadDefs[unitDef.name].members or {}) do
             local udef = UnitDefNames[member]
 
             -- For the time being, ignore air units

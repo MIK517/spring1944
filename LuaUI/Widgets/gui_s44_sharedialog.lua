@@ -2,487 +2,372 @@
 --------------------------------------------------------------------------------
 
 function widget:GetInfo()
-    return {
-        name         = "1944 Share dialog",
-        desc         = "Share dialog for Spring 1944",
-        author       = "Jose Luis Cercos-Pita",
-        date         = "2020-08-28",
-        license      = "GNU GPL, v2 or later",
-        layer        = 50,
-        experimental = false,
-        enabled      = true,
-    }
+	return {
+		name         = "1944 Share dialog",
+		desc         = "Give Command Points, Logistics and units to allies",
+		author       = "Jose Luis Cercos-Pita",
+		date         = "2020-08-28",
+		license      = "GNU GPL, v2 or later",
+		layer        = 50,
+		experimental = false,
+		enabled      = true,
+	}
 end
 
 --------------------------------------------------------------------------------
 --------------------------------------------------------------------------------
 
-local SELECTED_BACKGROUND = {1, 1, 1, 0.7}
-local UNSELECTED_BACKGROUND = {1, 1, 1, 0.1}
-local IMAGE_DIRNAME = LUAUI_DIRNAME .. "Images/ComWin/"
-local GLYPHS = {
-    tick = '\204\136',
-    metal = '\204\134',
-    energy = '\204\137',
+include("keysym.lua")
+
+local IMAGE_COMMAND = "LuaUI/Images/resources/command.png"
+local IMAGE_LOGISTICS = "LuaUI/Images/resources/logistics.png"
+local IMAGE_SELECTED = "LuaUI/Images/epicmenu/check.png"
+
+local WINDOW_WIDTH = 360
+local ROW_HEIGHT = 30
+
+local green = "\255\1\255\1"
+local white = "\255\255\255\255"
+
+local Chili
+local window, playerStack, selectedLabel
+local resourceRows = {}
+local shareUnitsCheckbox
+local playerButtons = {}
+local selectedTeamID
+
+local spGetTeamResources = Spring.GetTeamResources
+
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+-- Options
+
+local ToggleWindow
+
+options_path = 'Settings/HUD Panels/Share Dialog'
+options_order = {'toggleShareDialog'}
+options = {
+	toggleShareDialog = {
+		name = "Share Dialog",
+		desc = "Open the dialog to give Command Points, Logistics and the selected units to an ally.",
+		type = 'button',
+		hotkey = {key = 'h', mod = 'alt+'},
+		path = 'Hotkeys/Misc',
+		OnChange = function()
+			ToggleWindow()
+		end,
+	},
 }
 
 --------------------------------------------------------------------------------
 --------------------------------------------------------------------------------
+-- Utilities
 
-local Chili
-local main_win, main_players, main_metal, main_energy, main_shareunits
-local main_sendto, main_msg, main_send, main_cancel
-local myPlayerName, myTeamID, myAllyTeamId
-local selected_player = nil
-local teamColors = {}
-local buttons_players = {}
-local isAI = {}
-local mCurr, eCurr = 0, 0
+local function Format(value)
+	if value >= 10000 then
+		return string.format("%.1fk", value / 1000)
+	end
+	return string.format("%d", value)
+end
 
-------------------------------------------------
---speedups
-------------------------------------------------
-local min, max = math.min, math.max
-local floor, ceil = math.floor, math.ceil
-local GetTeamResources = Spring.GetTeamResources
-local GetPlayerRoster  = Spring.GetPlayerRoster
+local function GetTeamName(teamID)
+	local _, leader, _, isAI = Spring.GetTeamInfo(teamID, false)
+	if isAI then
+		local _, name = Spring.GetAIInfo(teamID)
+		return name or ("AI " .. teamID)
+	end
+	local name = leader and Spring.GetPlayerInfo(leader, false)
+	return name or ("Team " .. teamID)
+end
 
 --------------------------------------------------------------------------------
--- 
 --------------------------------------------------------------------------------
-local function OnSelectPlayer(self)
-    if selected_player ~= nil then
-        selected_player:SetCaption(selected_player.playername)
-        selected_player.backgroundColor = UNSELECTED_BACKGROUND
-    end
-    selected_player = self
-    self:SetCaption(GLYPHS["tick"] .. " " .. self.playername)
-    self.backgroundColor = SELECTED_BACKGROUND
+-- Controls
+
+local function SelectTeam(teamID)
+	selectedTeamID = teamID
+	for id, button in pairs(playerButtons) do
+		button.tick:SetVisibility(id == teamID)
+	end
+	if selectedLabel then
+		selectedLabel:SetCaption((teamID and ("Give to: " .. GetTeamName(teamID))) or "No allies to share with")
+	end
 end
 
-local function __playerButton(name, color, parent)
-    local glyph = ""
-    if (selected_player ~= nil) and (selected_player.playername == name) then
-        glyph = GLYPHS["tick"] .. " "
-    end
-
-    local button = Chili.Button:New {
-        x = 0,
-        y = 0,
-        right = 0,
-        height = 34,
-        caption = glyph .. name,
-        OnClick = { OnSelectPlayer, },
-        parent = parent ~= nil and parent or main_players,
-        playername = name,
-        font = {
-            outlineWidth  = 3,
-            outlineWeight = 10,
-            outline       = true,
-            color         = color,
-        },
-        padding = { 2,2,2,2 },
-        backgroundColor = UNSELECTED_BACKGROUND,
-        children = children,
-    }
-
-    if not isAI[name] then
-        Chili.Progressbar:New{
-            right = 30,
-            y = 2,
-            width = 20,
-            bottom = 2,
-            backgroundColor = {0, 0, 0, 0},
-            orientation = "vertical",
-            caption = "",
-            value = 0,
-            TileImageFG = IMAGE_DIRNAME .. "s44_cpu_progressbar_full.png",
-            TileImageBK = IMAGE_DIRNAME .. "s44_cpu_progressbar_empty.png",
-            parent = button,
-        }
-        Chili.Progressbar:New{
-            right = 10,
-            y = 2,
-            width = 20,
-            bottom = 2,
-            backgroundColor = {0, 0, 0, 0},
-            orientation = "vertical",
-            caption = "",
-            value = 0,
-            TileImageFG = IMAGE_DIRNAME .. "s44_cpu_progressbar_full.png",
-            TileImageBK = IMAGE_DIRNAME .. "s44_cpu_progressbar_empty.png",
-            parent = button,
-        }
-    end
-
-    return button
+local function UpdatePlayers()
+	if not playerStack then
+		return
+	end
+	playerStack:ClearChildren()
+	playerButtons = {}
+	local myTeamID = Spring.GetMyTeamID()
+	local teams = Spring.GetTeamList(Spring.GetMyAllyTeamID()) or {}
+	local firstTeam
+	local keepSelection = false
+	for i = 1, #teams do
+		local teamID = teams[i]
+		local _, _, isDead = Spring.GetTeamInfo(teamID, false)
+		if teamID ~= myTeamID and not isDead then
+			local r, g, b = Spring.GetTeamColor(teamID)
+			local button = Chili.Button:New{
+				parent = playerStack,
+				x = 0,
+				right = 0,
+				height = ROW_HEIGHT,
+				caption = GetTeamName(teamID),
+				padding = {4, 2, 4, 2},
+				objectOverrideFont = WG.GetSpecialFont(14, "s44share_team_" .. teamID, {
+					color = {r, g, b, 1}, outline = true, outlineWidth = 2, outlineWeight = 2,
+				}),
+				OnClick = {function() SelectTeam(teamID) end},
+			}
+			button.tick = Chili.Image:New{
+				parent = button,
+				x = 2,
+				y = 2,
+				width = ROW_HEIGHT - 10,
+				height = ROW_HEIGHT - 10,
+				file = IMAGE_SELECTED,
+			}
+			button.tick:SetVisibility(false)
+			playerButtons[teamID] = button
+			firstTeam = firstTeam or teamID
+			if teamID == selectedTeamID then
+				keepSelection = true
+			end
+		end
+	end
+	SelectTeam((keepSelection and selectedTeamID) or firstTeam)
 end
 
-local function OnResSlider(self, value, old_value)
-    local pbar = self.parent
-    pbar:SetValue(value)
+local function GetResourceRow(parent, y, image, resource)
+	local row = {resource = resource}
+	Chili.Image:New{
+		parent = parent,
+		x = 0,
+		y = y,
+		width = ROW_HEIGHT,
+		height = ROW_HEIGHT,
+		file = image,
+	}
+	row.trackbar = Chili.Trackbar:New{
+		parent = parent,
+		x = ROW_HEIGHT + 6,
+		y = y + 4,
+		right = 90,
+		height = ROW_HEIGHT - 8,
+		min = 0,
+		max = 100,
+		step = 5,
+		value = 0,
+		OnChange = {function()
+			if row.Update then -- also called while the trackbar is created
+				row.Update()
+			end
+		end},
+	}
+	row.label = Chili.Label:New{
+		parent = parent,
+		y = y,
+		right = 0,
+		width = 86,
+		height = ROW_HEIGHT,
+		align = "right",
+		valign = "center",
+		caption = "",
+		objectOverrideFont = WG.GetFont(13),
+	}
+	function row.GetAmount()
+		local current = spGetTeamResources(Spring.GetMyTeamID(), resource) or 0
+		return current * row.trackbar.value / 100, current
+	end
+	function row.Update()
+		local amount, current = row.GetAmount()
+		row.label:SetCaption(Format(amount) .. " / " .. Format(current))
+	end
+	return row
 end
 
-local function __OnResBarSize(self, w, h)
-    local icon = self.icon
-    local pbar = self.pbar
-    local slider = self.slider
-    h = floor(0.9 * min(self.height, 0.15 * self.width))
-    icon:Resize(h, h, true, true)
-    icon.font.size = Chili.OptimumFontSize(self.font,
-                                           icon.caption,
-                                           h,
-                                           h) - 2
-    pbar:SetPos(h + 5, 0.1 * h, self.width - h - 20, 0.7 * h, true, true)
-    pbar.font.size = Chili.OptimumFontSize(self.font,
-                                           "XXXXX/XXXXX",
-                                           0.9 * (self.width - h - 20),
-                                           0.5 * h) - 1
+local function HideWindow()
+	if window then
+		window:SetVisibility(false)
+	end
 end
 
-local function __ResBar(parent, y, h, color, res_name)
-    -- Create an invisible window container
-    local container = Chili.Window:New{
-        parent = parent,
-        x = 0,
-        y = y,
-        width = "100%",
-        height = h,
-        padding = {0, 0, 0, 0},
-        resizable = false,
-        draggable = false,
-        TileImage = IMAGE_DIRNAME .. "empty.png",
-    }
-    -- Create the icon at the left
-    h = floor(0.9 * container.height)
-    local icon = Chili.Label:New{
-        parent = container,
-        x = "0%",
-        y = "0%",
-        width = h,
-        height = h,
-        align = "left",
-        valign = "top",
-        caption = GLYPHS[res_name],
-        font = {size = Chili.OptimumFontSize(container.font,
-                                             GLYPHS[res_name],
-                                             h,
-                                             h) - 2,
-                color = color},
-    }
-    container.icon = icon
-
-    -- And the resource bar at the right
-    local w = container.width - h - 20
-    local bgcolor = {color[1] * 0.5,
-                     color[2] * 0.5,
-                     color[3] * 0.5,
-                     color[4]}
-    local pbar = Chili.Progressbar:New{
-        parent = container,
-        x = h + 5,
-        y = floor(0.1 * h),
-        width = w,
-        height = floor(0.7 * h),
-        color = color,
-        backgroundColor = bgcolor,
-        caption = "0/0",
-        value = 0,
-        font = {size = Chili.OptimumFontSize(container.font,
-                                             "XXXXX/XXXXX",
-                                             0.9 * w,
-                                             0.5 * h) - 1,
-                color = {1.0,1.0,1.0,1.0},
-                outlineColor = {0.0,0.0,0.0,1.0},
-                outline = true,
-                shadow  = false,},
-    }
-    container.pbar = pbar
-
-    -- We need a slider overlapped with the progress bar, which is actually
-    -- invisible
-    local slider = Chili.Trackbar:New{
-        parent = pbar,
-        x = "0%",
-        y = "0%",
-        width = "100%",
-        height = "150%",
-        TileImage = IMAGE_DIRNAME .. "empty.png",
-        StepImage  = IMAGE_DIRNAME .. "empty.png",
-        ThumbImage = IMAGE_DIRNAME .. "empty.png",
-        value = 0,
-        OnChange = {}
-    }
-    slider.res_name = res_name
-    slider.OnChange = {OnResSlider,}
-    container.slider = slider
-
-    container.OnResize = {__OnResBarSize,}
-    __OnResBarSize(container, container.width, container.height)
-    return container
+local function Share()
+	local teamID = selectedTeamID
+	if not teamID then
+		return
+	end
+	for _, row in ipairs(resourceRows) do
+		local amount = row.GetAmount()
+		if amount > 0 then
+			Spring.ShareResources(teamID, row.resource, amount)
+		end
+	end
+	if shareUnitsCheckbox.checked and Spring.GetSelectedUnitsCount() > 0 then
+		Spring.ShareResources(teamID, "units")
+	end
+	if WG.S44Debug then
+		WG.S44Debug.Log("share", "to team " .. teamID)
+	end
+	HideWindow()
 end
 
+local function CreateWindow()
+	local screenWidth, screenHeight = Spring.GetViewGeometry()
+	local height = 330
+	window = Chili.Window:New{
+		parent = Chili.Screen0,
+		name = "S44ShareDialog",
+		caption = "Share with allies",
+		x = math.floor((screenWidth - WINDOW_WIDTH) / 2),
+		y = math.floor((screenHeight - height) / 3),
+		width = WINDOW_WIDTH,
+		height = height,
+		resizable = false,
+		draggable = true,
+		padding = {10, 26, 10, 10},
+	}
 
-local function setupPlayers(playerID)
-    local stack
-    if playerID then
-        local name, active, spec, teamId, allyTeamId = Spring.GetPlayerInfo(playerID)
-        if buttons_players[name] ~= nil then
-            if selected_player == buttons_players[name] then
-                selected_player = nil
-            end
-            buttons_players[name]:Dispose()
-        end
-        if not spec and Spring.ArePlayersAllied(Spring.GetMyPlayerID(), playerID) then
-            teamColors[name] = {Spring.GetTeamColor(teamId)}
-            local button = __playerButton(name, teamColors[name])
-            button.teamId = teamId
-            buttons_players[name] = button
-        else
-            
-        end
-    else
-        main_players:ClearChildren()
-        selected_player = nil
-        buttons_players = {}
-        isAI = {}
-        local teams = Spring.GetTeamList(myAllyTeamId)
-        for _, teamId in ipairs(teams) do
-            local _, _, _, ai = Spring.GetTeamInfo(teamId)
-            if ai then
-                local _, name = Spring.GetAIInfo(teamId)
-                isAI[name] = true
-                teamColors[name] = {Spring.GetTeamColor(teamId)}
-                local button = __playerButton(name, teamColors[name])
-                button.teamId = teamId
-                buttons_players[name] = button
-            else
-                local players = Spring.GetPlayerList(teamId, true)
-                for _, id in ipairs(players) do
-                    local name, active, spec = Spring.GetPlayerInfo(id)
-                    if not spec then
-                        teamColors[name] = {Spring.GetTeamColor(teamId)}
-                        local button = __playerButton(name, teamColors[name])
-                        button.teamId = teamId
-                        buttons_players[name] = button
-                    end
-                end
-            end
-        end
-    end
+	local playerScroll = Chili.ScrollPanel:New{
+		parent = window,
+		x = 0,
+		y = 0,
+		right = 0,
+		height = 120,
+		horizontalScrollbar = false,
+	}
+	playerStack = Chili.StackPanel:New{
+		parent = playerScroll,
+		x = 0,
+		y = 0,
+		right = 0,
+		resizeItems = false,
+		autosize = true,
+		itemPadding = {0, 0, 0, 0},
+		itemMargin = {0, 0, 0, 2},
+		padding = {0, 0, 0, 0},
+		preserveChildrenOrder = true,
+	}
 
-    main_players:SetPosRelative(nil, nil, nil, #main_players.children * 34 + 10, true, false)
+	selectedLabel = Chili.Label:New{
+		parent = window,
+		x = 0,
+		y = 124,
+		right = 0,
+		height = 18,
+		caption = "",
+		objectOverrideFont = WG.GetFont(13),
+	}
+
+	resourceRows = {
+		GetResourceRow(window, 146, IMAGE_COMMAND, "metal"),
+		GetResourceRow(window, 146 + ROW_HEIGHT + 4, IMAGE_LOGISTICS, "energy"),
+	}
+
+	shareUnitsCheckbox = Chili.Checkbox:New{
+		parent = window,
+		x = 0,
+		y = 146 + 2 * (ROW_HEIGHT + 4),
+		right = 0,
+		height = 20,
+		caption = "Give the selected units",
+		checked = false,
+		boxalign = "left",
+		objectOverrideFont = WG.GetFont(13),
+	}
+
+	Chili.Button:New{
+		parent = window,
+		x = 0,
+		bottom = 0,
+		width = "48%",
+		height = 30,
+		caption = "Share",
+		tooltip = "Give the chosen amounts (and the selected units) to the ally.",
+		OnClick = {Share},
+	}
+	Chili.Button:New{
+		parent = window,
+		right = 0,
+		bottom = 0,
+		width = "48%",
+		height = 30,
+		caption = "Close",
+		OnClick = {HideWindow},
+	}
+	window:SetVisibility(false)
 end
 
-local function GetColourScale(value)
-    local colour = {0, 1, 0, 1}
-    colour[1] = math.min(50, value) / 50
-    colour[2] = 1 - (math.max(0, value - 50) / 50)
-    return colour
+ToggleWindow = function(teamID)
+	if not window then
+		return
+	end
+	if window.visible and not teamID then
+		HideWindow()
+		return
+	end
+	UpdatePlayers()
+	if teamID and playerButtons[teamID] then
+		SelectTeam(teamID)
+	end
+	for _, row in ipairs(resourceRows) do
+		row.Update()
+	end
+	shareUnitsCheckbox.checked = Spring.GetSelectedUnitsCount() > 0 and (teamID ~= nil)
+	shareUnitsCheckbox:Invalidate()
+	window:SetVisibility(true)
+	window:BringToFront()
 end
 
-function ShowWin()
-    main_win:Show()
-    if selected_player == nil and #main_players.children > 0 then
-        OnSelectPlayer(main_players.children[1])
-    end
-
-    if WG.bindAnyEsc ~= nil then
-        -- WG.bindAnyEsc is provided by "1944 Quit menu" widget
-        WG.bindAnyEsc(false)
-    end
-    Spring.SendCommands("bind esc s44sharedialog")
-end
-
-function HideWin()
-    main_win:Hide()
-
-    Spring.SendCommands("unbind esc s44sharedialog")
-    if WG.bindAnyEsc ~= nil then
-        -- WG.bindAnyEsc is provided by "1944 Quit menu" widget
-        WG.bindAnyEsc(true)
-    end
-end
-
-function OnApply()
-    if selected_player == nil then
-        return
-    end
-    local mshare = mCurr * main_metal.pbar.value / 100
-    Spring.ShareResources(selected_player.teamId, "metal", mshare)
-    local eshare = eCurr * main_energy.pbar.value / 100
-    Spring.ShareResources(selected_player.teamId, "energy", eshare)
-    if main_shareunits.checked then
-        Spring.ShareResources(selected_player.teamId, "units")
-    end
-end
-
-function __AddButton(parent, caption, action, y)
-    y = y or "0%"
-    local fontsize = Chili.OptimumFontSize(parent.font,
-                                           "Close",
-                                           0.8 * ((parent.width - 10) - 10),
-                                           0.6 * (0.05 * (parent.height - 10) - 10))
-    return Chili.Button:New{
-        parent = parent,
-        x = "0%",
-        y = y,
-        width = "100%",
-        height = "5%",
-        padding = {0, 0, 0, 0},
-        caption = caption,
-        font = {size = fontsize},
-        OnClick = {action}
-    }
-end
-
-function OnShareDialog()
-    if main_win.visible then
-        HideWin()
-    else
-        ShowWin()
-    end
-end
-
+--------------------------------------------------------------------------------
 --------------------------------------------------------------------------------
 -- Callins
---------------------------------------------------------------------------------
 
 function widget:Initialize()
-    if (not WG.Chili) then
-        widgetHandler:RemoveWidget()
-        return
-    end
-
-    Chili = WG.Chili
-    local viewSizeX, viewSizeY = Spring.GetViewGeometry()
-    myPlayerName, _, _, myTeamID, myAllyTeamId = Spring.GetPlayerInfo(Spring.GetMyPlayerID())
-
-    main_win = Chili.Window:New{
-        parent = Chili.Screen0,
-        x = "30%",
-        y = "20%",
-        width = "40%",
-        height = "60%",
-        draggable = false,
-        resizable = false,
-    }
-
-    -- Players list
-    local main_players_scroll = Chili.ScrollPanel:New{
-        padding = {1, 1, 1, 1},
-        x = "0%",
-        y = "0%",
-        width = '100%',
-        height = '66%',
-        verticalSmartScroll = true,
-        ignoreMouseWheel = false,
-        verticalScrollbar = true,
-        horizontalScrollbar = false,
-        parent = main_win,
-    }
-
-    main_players = Chili.StackPanel:New{
-        margin = { 0, 0, 0, 0 },
-        padding = { 0, 0, 0, 0 },
-        x = 0,
-        y = 0,
-        width = "100%",
-        height = "100%",
-        resizeItems = false,
-        itemPadding  = { 1, 1, 1, 1 },
-        itemMargin  = {0, 0, 0, 0},
-        autosize = true,
-        preserveChildrenOrder = true,
-        parent = main_players_scroll,
-    }
-
-    -- Resources sharing
-    main_metal = __ResBar(main_win, "66%", "8%", {0.7, 0.7, 0.7, 1}, "metal")
-    main_energy = __ResBar(main_win, "74%", "8%", {0.9, 0.9, 0.1, 1}, "energy")
-
-    -- Units sharing
-    main_shareunits = Chili.Checkbox:New{
-        x = 0,
-        y = "82%",
-        width = "100%",
-        height = "8%",
-        caption = "Share selected units",
-        checked = false,
-        boxalign = "left",
-        boxsize = 20,
-        parent = main_win,
-    }
-
-    -- Buttons
-    __AddButton(main_win, "Share", OnApply, "90%")
-    __AddButton(main_win, "Close", HideWin, "95%")
-
-    setupPlayers()
-    main_win:Hide()
-    Spring.SendCommands("unbind any+h sharedialog")
-    widgetHandler:AddAction("s44sharedialog", OnShareDialog)
-    Spring.SendCommands("bind any+h s44sharedialog")
+	Chili = WG.Chili
+	if not Chili then
+		widgetHandler:RemoveWidget()
+		return
+	end
+	CreateWindow()
+	WG.S44ShareDialog = {
+		Open = function(teamID)
+			ToggleWindow(teamID)
+		end,
+	}
 end
 
-function widget:GameStart()
-    setupPlayers()
-end
-
-function widget:PlayerChanged(playerID)
-    setupPlayers(playerID)
+function widget:KeyPress(key)
+	if key == KEYSYMS.ESCAPE and window and window.visible then
+		HideWindow()
+		return true
+	end
 end
 
 function widget:GameFrame(n)
-    if main_win == nil or not main_win.visible then
-        return
-    end
-
-    mCurr, _ = GetTeamResources(myTeamID, "metal")
-    eCurr, _ = GetTeamResources(myTeamID, "energy")
-
-    local mfactor = main_metal.pbar.value / 100
-    main_metal.pbar:SetCaption(Chili.ToSI(mCurr * mfactor) .. "/" .. Chili.ToSI(mCurr))
-    local efactor = main_energy.pbar.value / 100
-    main_energy.pbar:SetCaption(Chili.ToSI(eCurr * efactor) .. "/" .. Chili.ToSI(eCurr))
+	if n % 15 ~= 0 or not (window and window.visible) then
+		return
+	end
+	for _, row in ipairs(resourceRows) do
+		row.Update()
+	end
 end
 
-function widget:DrawScreen()
-    if main_win == nil or not main_win.visible then
-        return
-    end
+function widget:PlayerChanged()
+	if window and window.visible then
+		UpdatePlayers()
+	end
+end
 
-    playerlist = GetPlayerRoster(1)
-    if playerlist == nil then
-        return
-    end
-
-    for _, player_data in ipairs(playerlist) do
-        local name = player_data[1]
-        local button = buttons_players[name]
-        if button ~= nil then
-            local cpu = math.floor(player_data[6] * 100 + 0.5)
-            local ping = math.floor(player_data[7] * 1000 + 0.5)
-            -- Rescale ping
-            ping = math.max(0, ping - 100)
-            ping = math.min(1000, ping)
-            ping = ping / 10
-            -- Set the progress bars
-            button.children[1]:SetValue(cpu)
-            button.children[1]:SetColor(GetColourScale(cpu))
-            button.children[2]:SetValue(ping)
-            button.children[2]:SetColor(GetColourScale(ping))
-        end
-    end
+function widget:TeamDied()
+	widget:PlayerChanged()
 end
 
 function widget:Shutdown()
-    if (main_win) then
-        HideWin()
-        main_win:Dispose()
-    end
-
-    widgetHandler:RemoveAction("s44sharedialog")
-    Spring.SendCommands({"unbind any+h s44sharedialog"})
-    Spring.SendCommands({"bind any+h sharedialog"})
+	WG.S44ShareDialog = nil
+	if window then
+		window:Dispose()
+	end
 end

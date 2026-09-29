@@ -62,32 +62,84 @@ WG.POSTPROC = {
     },
 }
 
+--------------------------------------------------------------------------------
+-- Settings > Graphics > Post-processing
+
+local function SetEffect(effect, field, index)
+	return function(self)
+		if index then
+			WG.POSTPROC[effect][field][index] = self.value
+		else
+			WG.POSTPROC[effect][field] = self.value
+		end
+	end
+end
+
+options_path = 'Settings/Graphics/Post-processing'
+options_order = {'toggle', 'lbl_tone', 'gamma', 'dgamma', 'lbl_film', 'grain', 'scratches', 'vignette', 'aberration', 'lbl_colour', 'grayscale', 'sepia'}
+options = {
+	toggle = {
+		name = 'Toggle Post-processing',
+		desc = 'Turns the post-processing effects below on or off.',
+		type = 'button',
+		OnChange = function() Spring.SendCommands("luaui togglewidget Post-processing") end,
+	},
+	lbl_tone = {name = 'Tone', type = 'label'},
+	gamma = {
+		name = 'Gamma',
+		type = 'number', min = 0.5, max = 1.0, step = 0.01, value = 0.75,
+		OnChange = SetEffect("tonemapping", "gamma"),
+	},
+	dgamma = {
+		name = 'Gamma Fluctuation',
+		desc = 'Old film style flicker of the brightness.',
+		type = 'number', min = 0.0, max = 1.0, step = 0.02, value = 0.0,
+		OnChange = SetEffect("tonemapping", "dGamma"),
+	},
+	lbl_film = {name = 'Film', type = 'label'},
+	grain = {
+		name = 'Film Grain',
+		type = 'number', min = 0.0, max = 0.1, step = 0.002, value = 0.02,
+		OnChange = SetEffect("filmgrain", "grain"),
+	},
+	scratches = {
+		name = 'Scratches',
+		type = 'number', min = 0.0, max = 1.0, step = 0.02, value = 0.0,
+		OnChange = SetEffect("scratches", "threshold"),
+	},
+	vignette = {
+		name = 'Vignette',
+		desc = 'Lower values darken the screen edges more.',
+		type = 'number', min = 0.7, max = 2.0, step = 0.02, value = 1.0,
+		OnChange = SetEffect("vignette", "vignette", 2),
+	},
+	aberration = {
+		name = 'Colour Aberration',
+		type = 'number', min = 0.0, max = 0.5, step = 0.01, value = 0.1,
+		OnChange = SetEffect("aberration", "aberration"),
+	},
+	lbl_colour = {name = 'Colour', type = 'label'},
+	grayscale = {
+		name = 'Gray / Sepia Colour',
+		type = 'bool', value = false,
+		OnChange = SetEffect("grayscale", "enabled"),
+	},
+	sepia = {
+		name = 'Sepia Tone',
+		type = 'number', min = 0.0, max = 1.0, step = 0.02, value = 0.5,
+		OnChange = SetEffect("grayscale", "sepia"),
+	},
+}
+
 function widget:Initialize()
+	-- The menu only calls OnChange for values that differ from the default,
+	-- so apply every value once here.
+	for key, option in pairs(options) do
+		if option.type == 'number' or option.type == 'bool' then
+			option.OnChange(option)
+		end
+	end
 end
 
 function widget:Shutdown()
-end
-
-function widget:GetConfigData(data)
-    return {
-        gamma      = WG.POSTPROC.tonemapping.gamma,
-        dgamma     = WG.POSTPROC.tonemapping.dGamma,
-        grain      = WG.POSTPROC.filmgrain.grain,
-        scratches  = WG.POSTPROC.scratches.threshold,
-        vignette   = WG.POSTPROC.vignette.vignette[2],
-        aberration = WG.POSTPROC.aberration.aberration,
-        grayscale  = WG.POSTPROC.grayscale.enabled,
-        sepia      = WG.POSTPROC.grayscale.sepia
-    }
-end
-
-function widget:SetConfigData(data)
-    WG.POSTPROC.tonemapping.gamma     = data.gamma      or WG.POSTPROC.tonemapping.gamma
-    WG.POSTPROC.tonemapping.dGamma    = data.dgamma     or WG.POSTPROC.tonemapping.dGamma
-    WG.POSTPROC.filmgrain.grain       = data.grain      or WG.POSTPROC.filmgrain.grain
-    WG.POSTPROC.scratches.threshold   = data.scratches  or WG.POSTPROC.scratches.threshold
-    WG.POSTPROC.vignette.vignette[2]  = data.vignette   or WG.POSTPROC.vignette.vignette[2]
-    WG.POSTPROC.aberration.aberration = data.aberration or WG.POSTPROC.aberration.aberration
-    WG.POSTPROC.grayscale.enabled     = data.grayscale  or WG.POSTPROC.grayscale.enabled
-    WG.POSTPROC.grayscale.sepia       = data.sepia      or WG.POSTPROC.grayscale.sepia
 end

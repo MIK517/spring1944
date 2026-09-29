@@ -1,431 +1,387 @@
 function widget:GetInfo()
-    return {
-        name        = "1944 Aircraft Selection Bar",
-        desc        = "A selection bar for aircrafts",
-        author      = "Ray Modified by Godde, Szunti, kmar, Jose Luis Cercos Pita",
-        date        = "2011-09-06",
-        license     = "GNU GPL v2 or later",
-        layer       = 1,
-        enabled     = true,
-    }
+	return {
+		name        = "1944 Aircraft Selection Bar",
+		desc        = "A selection bar for aircraft, in the style of the Zero-K interface panels",
+		author      = "Ray Modified by Godde, Szunti, kmar, Jose Luis Cercos Pita",
+		date        = "2011-09-06",
+		license     = "GNU GPL v2 or later",
+		layer       = 1,
+		enabled     = true,
+	}
 end
 
--- CONSTANTS
-local mainScaleLeft   = 0.900  -- Default widget position
-local mainScaleTop    = 0.050  -- Default widget position
-local mainScaleWidth  = 0.050  -- Default widget width
-local mainScaleHeight = 0.835  -- Default widget height
-WG.PLANESBAROPTS = {
-    x = mainScaleLeft,
-    y = mainScaleTop,
-    width = mainScaleWidth,
-    height = mainScaleHeight,
-}
-local IMAGE_DIRNAME = LUAUI_DIRNAME .. "Images/ComWin/"
-local MINBUTTONSIZE = 0.04
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+-- Aircraft arrive as sorties and cannot be box selected easily, so this bar
+-- lists them. It stays hidden while the player has no aircraft.
 
--- MEMBERS
-local Chili
-local main_win, container, buttonsize
-local myTeamID = 0
-local aircrafts = {}
-local overAircraft = nil
--- To optimize we want to traverse just one aircraft per frame
-local aircrafts_iterator, current_aircraft = {}, 0
+local BUTTON_SIZE = 56
+local BAR_HEIGHT = 5
+local MAX_ROWS = 8
+local TOP_OFFSET = 60 -- below the top bar, in the top-left corner Zero-K's layout leaves free
 
--- CONTROLS
-local floor, ceil = math.floor, math.ceil
-local min, max    = math.min, math.max
-local GetViewGeometry    = Spring.GetViewGeometry
 local GetUnitDefID       = Spring.GetUnitDefID
 local GetUnitHealth      = Spring.GetUnitHealth
 local GetSelectedUnits   = Spring.GetSelectedUnits
 local GetTeamUnits       = Spring.GetTeamUnits
 local GetMyTeamID        = Spring.GetMyTeamID
 local GetUnitRulesParam  = Spring.GetUnitRulesParam
-local GetMyTeamID        = Spring.GetMyTeamID
 local GetUnitPosition    = Spring.GetUnitPosition
 local SelectUnitArray    = Spring.SelectUnitArray
+local IsUnitSelected     = Spring.IsUnitSelected
 local glUnit             = gl.Unit
 local glDrawGroundCircle = gl.DrawGroundCircle
 
--- SCRIPT FUNCTIONS
-function ResetPlanesBar()
-    -- Reset default values
-    WG.PLANESBAROPTS.x = mainScaleLeft
-    WG.PLANESBAROPTS.y = mainScaleTop
-    WG.PLANESBAROPTS.width = mainScaleWidth
-    WG.PLANESBAROPTS.height = mainScaleHeight
-    local viewSizeX, viewSizeY = GetViewGeometry()
-    x = WG.PLANESBAROPTS.x * viewSizeX
-    y = WG.PLANESBAROPTS.y * viewSizeY
-    w = WG.PLANESBAROPTS.width * viewSizeX
-    h = WG.PLANESBAROPTS.height * viewSizeY
-    main_win:SetPosRelative(x, y, w, h, true, false)
+-- See LuaRules/Gadgets/game_planes.lua: fuel scales with the map size.
+local REFERENCE_FUEL_AMOUNT = 24
+local fuelMapScale = math.sqrt(Game.mapX^2 + Game.mapY^2) / REFERENCE_FUEL_AMOUNT
+
+local Chili
+local window, grid
+local myTeamID = GetMyTeamID()
+local aircraft = {} -- unitID -> button data
+local aircraftOrder = {}
+local updateIndex = 0
+local hoveredUnitID
+local UpdateLayout
+local layoutTimer = 0
+
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+-- Options
+
+options_path = 'Settings/HUD Panels/Aircraft Bar'
+options_order = {'buttonSize', 'highlightHovered'}
+options = {
+	buttonSize = {
+		name = "Button Size",
+		type = "number",
+		value = BUTTON_SIZE, min = 30, max = 120, step = 1,
+		OnChange = function(self)
+			BUTTON_SIZE = self.value
+			if window then
+				for _, data in pairs(aircraft) do
+					data.button:SetPos(nil, nil, BUTTON_SIZE, BUTTON_SIZE)
+				end
+				UpdateLayout()
+			end
+		end,
+	},
+	highlightHovered = {
+		name = "Highlight hovered aircraft",
+		desc = "Draw range rings around the aircraft under the mouse.",
+		type = "bool",
+		value = true,
+		noHotkey = true,
+	},
+}
+
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+-- Utilities
+
+local function GetHealthColor(fraction)
+	if fraction > 0.5 then
+		return {(1 - fraction) * 2, 1, 0, 1}
+	end
+	return {1, fraction * 2, 0, 1}
 end
 
-local function ResizeContainer()
-    if #container.children == 0 and not main_win.force_show then
-        main_win:Hide()
-        return
-    end
-    main_win:Show()
-
-    local w = container.width
-    if not container.parent._vscrollbar then
-        w = w - container.parent.scrollbarSize
-    end
-
-    -- Count the number of columns and rows
-    local viewSizeX, viewSizeY = GetViewGeometry()
-    local buttonsize = min(w, MINBUTTONSIZE * max(viewSizeX, viewSizeY))
-    local cols = floor(w / buttonsize)
-    local rows = max(1, ceil(#container.children / cols))
-    -- Fit the buttons to the available space
-    buttonsize = w / cols
-    for _, c in ipairs(container.children) do
-        c:Resize(buttonsize, buttonsize)
-        c.image:Resize(buttonsize - 2, buttonsize - 2)
-        c.hbar:SetPos(0.5 * buttonsize, buttonsize - 20, 0.5 * buttonsize - 1, 10)
-        c.fbar:SetPos(0.5 * buttonsize, buttonsize - 10, 0.5 * buttonsize - 1, 10)
-    end
-    -- Set the number of rows and columns of the widget
-    container.columns = cols
-    container.rows = rows
-    -- Set a more convenient height
-    container:SetPosRelative(nil, nil, nil, rows * buttonsize, true, false)
+local function OpenOptionsOnSpaceClick()
+	local _, _, meta = Spring.GetModKeyState()
+	if not meta then
+		return false
+	end
+	WG.crude.OpenPath(options_path)
+	WG.crude.ShowMenu()
+	return true
 end
 
-local function __OnMainWinSize(self, w, h)
-    ResizeContainer()
+UpdateLayout = function()
+	if not window then
+		return
+	end
+	local count = #aircraftOrder
+	if count == 0 then
+		window:SetVisibility(false)
+		return
+	end
+	-- Stay above the quick selection bar, which takes the lower half of the
+	-- left edge in the default layout.
+	local _, screenHeight = Spring.GetViewGeometry()
+	local top = math.max(TOP_OFFSET, (WG.S44SortiePanel and (WG.S44SortiePanel.GetBottom() + 4)) or 0)
+	if window.y ~= top then
+		window:SetPos(nil, top)
+	end
+	local maxRows = math.max(1, math.min(MAX_ROWS, math.floor((screenHeight/2 - top - 12) / BUTTON_SIZE)))
+	local rows = math.min(count, maxRows)
+	local columns = math.ceil(count / rows)
+	grid.columns = columns
+	grid.rows = rows
+	local width = columns * BUTTON_SIZE + 12
+	local height = rows * BUTTON_SIZE + 12
+	if window.width ~= width or window.height ~= height then
+		window:SetPos(nil, nil, width, height)
+	end
+	window:SetVisibility(true)
 end
 
-local function __OnLockWindow(self)
-    local viewSizeX, viewSizeY = GetViewGeometry()
-    WG.PLANESBAROPTS.x = self.x / viewSizeX
-    WG.PLANESBAROPTS.y = self.y / viewSizeY
-    WG.PLANESBAROPTS.width = self.width / viewSizeX
-    WG.PLANESBAROPTS.height = self.height / viewSizeY
-    self.force_show = false
-    ResizeContainer()
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+-- Buttons
+
+local function OnAircraftClick(self, x, y, button)
+	if OpenOptionsOnSpaceClick() then
+		return true
+	end
+	local unitID = self.unitID
+	local _, _, _, shift = Spring.GetModKeyState()
+	if button == 1 then
+		if shift then
+			local units = GetSelectedUnits()
+			units[#units + 1] = unitID
+			SelectUnitArray(units)
+		else
+			SelectUnitArray({unitID})
+		end
+	elseif button == 2 then
+		local ux, uy, uz = GetUnitPosition(unitID)
+		if ux then
+			Spring.SetCameraTarget(ux, uy, uz)
+		end
+	elseif button == 3 then
+		local units = GetSelectedUnits()
+		if IsUnitSelected(unitID) then
+			for i = #units, 1, -1 do
+				if units[i] == unitID then
+					table.remove(units, i)
+				end
+			end
+		else
+			units[#units + 1] = unitID
+		end
+		SelectUnitArray(units)
+	end
+	return true
 end
 
-local function __OnUnlockWindow(self)
-    self.force_show = true
-    ResizeContainer()
+local function AddAircraft(unitID, unitDefID)
+	if aircraft[unitID] then
+		return
+	end
+	local ud = UnitDefs[unitDefID]
+	local button = Chili.Button:New{
+		parent = grid,
+		width = BUTTON_SIZE,
+		height = BUTTON_SIZE,
+		padding = {2, 2, 2, 2},
+		margin = {0, 0, 0, 0},
+		caption = "",
+		noFont = true,
+		tooltip = Spring.Utilities.GetHumanName(ud) .. "\n" ..
+			"\255\1\255\1Left click\255\255\255\255: select\n" ..
+			"\255\1\255\1Shift+left click\255\255\255\255: add to selection\n" ..
+			"\255\1\255\1Right click\255\255\255\255: add to or remove from selection\n" ..
+			"\255\1\255\1Middle click\255\255\255\255: go to",
+		OnClick = {OnAircraftClick},
+		OnMouseOver = {function(self) hoveredUnitID = self.unitID end},
+		OnMouseOut = {function(self)
+			if hoveredUnitID == self.unitID then
+				hoveredUnitID = nil
+			end
+		end},
+	}
+	button.unitID = unitID
+	local image = Chili.Image:New{
+		parent = button,
+		x = 0,
+		y = 0,
+		right = 0,
+		bottom = 2 * BAR_HEIGHT,
+		keepAspect = true,
+		file = "#" .. unitDefID,
+	}
+	local healthBar = Chili.Progressbar:New{
+		parent = button,
+		x = 0,
+		right = 0,
+		bottom = BAR_HEIGHT,
+		height = BAR_HEIGHT,
+		max = 1,
+		value = 1,
+		caption = false,
+		noFont = true,
+		color = {0, 1, 0, 1},
+	}
+	local fuelBar = Chili.Progressbar:New{
+		parent = button,
+		x = 0,
+		right = 0,
+		bottom = 0,
+		height = BAR_HEIGHT,
+		max = 1,
+		value = 1,
+		caption = false,
+		noFont = true,
+		color = {0.9, 0.58, 0.21, 1},
+	}
+	local maxFuel = tonumber(ud.customParams.maxfuel)
+	aircraft[unitID] = {
+		button = button,
+		healthBar = healthBar,
+		fuelBar = fuelBar,
+		maxFuel = maxFuel and (maxFuel * fuelMapScale),
+	}
+	aircraftOrder[#aircraftOrder + 1] = unitID
+	UpdateLayout()
 end
 
-local function GetColourScale(value, alpha)
-    local v = 100 - value
-    local colour = {0, 1, 0, alpha or 1}
-    colour[1] = min(50, v) / 50
-    colour[2] = 1 - (max(0, v - 50) / 50)
-    return colour
+local function RemoveAircraft(unitID)
+	local data = aircraft[unitID]
+	if not data then
+		return
+	end
+	data.button:Dispose()
+	aircraft[unitID] = nil
+	for i = 1, #aircraftOrder do
+		if aircraftOrder[i] == unitID then
+			table.remove(aircraftOrder, i)
+			break
+		end
+	end
+	if hoveredUnitID == unitID then
+		hoveredUnitID = nil
+	end
+	UpdateLayout()
 end
 
-local function __HealthBarAutoColor(self, value)
-    self:SetColor(GetColourScale(value, 0.8))
+local function UpdateAircraft(unitID)
+	local data = aircraft[unitID]
+	local health, maxHealth = GetUnitHealth(unitID)
+	if health and maxHealth and maxHealth > 0 then
+		local fraction = health / maxHealth
+		data.healthBar.color = GetHealthColor(fraction)
+		data.healthBar:SetValue(fraction)
+	end
+	if data.maxFuel then
+		local fuel = GetUnitRulesParam(unitID, "fuel") or data.maxFuel
+		data.fuelBar:SetValue(math.max(0, math.min(1, fuel / data.maxFuel)))
+	end
 end
 
-local function __makeButton(unitDefID, parent, size)
-    local unitDef = UnitDefs[unitDefID]
-    size = size or buttonsize
-
-    local button = Chili.Button:New {
-        parent = parent,
-        width = size,
-        height = size,
-        padding = {1, 1, 1, 1},
-        margin = {0, 0, 0, 0},
-        caption = "",
-        isDisabled = false,
-        TileImageBK = IMAGE_DIRNAME .. "empty.png",
-        TileImageFG = IMAGE_DIRNAME .. "s44_button_alt_fg.png",
-    }
-    local image = Chili.Image:New {
-        parent = button,
-        x=0,
-        y=0,
-        width = "100%",
-        keepAspect = true,
-        file = '#' .. unitDefID,
-        padding = {0, 0, 0, 0}
-    }
-    local hbar = Chili.Progressbar:New{
-        parent = image,
-        x = "50%",
-        bottom = 0,
-        width = "50%",
-        height = 10,
-        color = GetColourScale(100, 0.8),
-        backgroundColor = {0.1, 0.1, 0.1, 0.6},
-        orientation = "horizontal",
-        caption = "",
-        value = 100,
-        OnChange = {__HealthBarAutoColor, },
-        TileImageFG = IMAGE_DIRNAME .. "s44_cpu_progressbar_full.png",
-        TileImageBK = IMAGE_DIRNAME .. "s44_cpu_progressbar_empty.png",
-    }
-    local fbar = Chili.Progressbar:New{
-        parent = image,
-        x = "50%",
-        bottom = 10,
-        width = "100%",
-        height = 10,
-        color = {0.8, 0.5, 0.05, 0.8},
-        backgroundColor = {0.1, 0.1, 0.1, 0.6},
-        orientation = "horizontal",
-        caption = "",
-        value = 100,
-        TileImageFG = IMAGE_DIRNAME .. "s44_cpu_progressbar_full.png",
-        TileImageBK = IMAGE_DIRNAME .. "s44_cpu_progressbar_empty.png",
-    }
-    button.image = image
-    button.hbar = hbar
-    button.fbar = fbar
-    return button
+local function GenerateAircraft()
+	for unitID in pairs(aircraft) do
+		RemoveAircraft(unitID)
+	end
+	for _, unitID in ipairs(GetTeamUnits(myTeamID) or {}) do
+		local unitDefID = GetUnitDefID(unitID)
+		if unitDefID and UnitDefs[unitDefID].canFly then
+			AddAircraft(unitID, unitDefID)
+		end
+	end
+	UpdateLayout()
 end
 
-local function OnAircraft(self, x, y, btn)
-    local unitID = self.unitID
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+-- Callins
 
-    if btn == 1 then
-        Spring.SelectUnitArray({unitID})
-    elseif btn == 2 then
-        local x,y,z = GetUnitPosition(unitID)
-        Spring.SetCameraTarget(x,y,z)
-    elseif btn == 3 then
-        local units = GetSelectedUnits()
-        units[#units + 1] = unitID
-        Spring.SelectUnitArray(units)
-    end
-end
-
-local function DrawAircraft(self)
-    local unitID = self.unitID
-    overAircraft = unitID
-end
-
-local function UndrawAircraft(self)
-    local unitID = self.unitID
-    if overAircraft == unitID then
-        overAircraft = nil
-    end
-end
-
-local function __makeAircraft(unitID, unitDefID, unitDef)
-    local tooltip = unitDef.humanName .. "\n"
-    tooltip = tooltip .. "Left mouse: Select\n"
-    tooltip = tooltip .. "Middle mouse: set camera target\n"
-    tooltip = tooltip .. "Right mouse: Add to selection\n"
-    local button = __makeButton(unitDefID, container)
-    button.unitID = unitID
-    button.unitDefID = unitDefID
-    button.unitDef = unitDef
-    button.OnClick = {OnAircraft, }
-    button.OnMouseOver = {DrawAircraft, }
-    button.OnMouseOut = {UndrawAircraft, }
-    button.tooltip = tooltip
-    aircrafts_iterator[#aircrafts_iterator + 1] = unitID
-    aircrafts[unitID] = button
-end
-
-function GenerateAircrafts()
-    aircrafts = {}
-    aircrafts_iterator = {}
-    current_aircraft = 0
-    container:ClearChildren()
-    local teamUnits = GetTeamUnits(myTeamID)
-    for _, unitID in ipairs(teamUnits) do
-        local unitDefID = GetUnitDefID(unitID)
-        local unitDef = UnitDefs[unitDefID]
-        if unitDef.canFly then
-            __makeAircraft(unitID, unitDefID, unitDef)
-        end
-    end
-    ResizeContainer()
-end
-
-------------------------------------------------
---callins
-------------------------------------------------
 function widget:Initialize()
-    if (not WG.Chili) then
-        widgetHandler:RemoveWidget()
-        return
-    end
-    Chili = WG.Chili
-    local viewSizeX, viewSizeY = GetViewGeometry()
-    myTeamID = GetMyTeamID()
-
-    main_win = Chili.Window:New{
-        parent = Chili.Screen0,
-        x = tostring(floor(100 * WG.PLANESBAROPTS.x)) .. "%",
-        y = tostring(floor(100 * WG.PLANESBAROPTS.y)) .. "%",
-        width = tostring(floor(100 * WG.PLANESBAROPTS.width)) .. "%",
-        height = tostring(floor(100 * WG.PLANESBAROPTS.height)) .. "%",
-        draggable = true,
-        resizable = true,
-        padding = {0, 0, 0, 0},
-        minWidth = 96,
-        minHeight = 96,
-        caption = "Aircrafts",
-        force_show = true,
-    }
-    Chili.AddCustomizableWindow(main_win)
-
-    local scroll = Chili.ScrollPanel:New{
-        parent = main_win,
-        x = 0,
-        y = 10,
-        width = "100%",
-        bottom = 10,
-        horizontalScrollbar = false,
-        BorderTileImage = IMAGE_DIRNAME .. "empty.png",
-        BackgroundTileImage = IMAGE_DIRNAME .. "empty.png",
-    }
-    container = Chili.Grid:New{
-        parent = scroll,
-        x = 0,
-        y = 0,
-        width = "100%",
-        height = "100%",
-    }
-
-    widgetHandler:AddAction("resetplanesbar", ResetPlanesBar)
-
-    -- Set the widget size, which apparently were not working well
-    x = WG.PLANESBAROPTS.x * viewSizeX
-    y = WG.PLANESBAROPTS.y * viewSizeY
-    w = WG.PLANESBAROPTS.width * viewSizeX
-    h = WG.PLANESBAROPTS.height * viewSizeY
-    main_win:SetPosRelative(x, y, w, h, true, false)
-    main_win.OnMove = {__OnMainWinSize,}
-    main_win.OnResize = {__OnMainWinSize,}
-    ResizeContainer()
-    -- Save the new dimensions when the widget is locked
-    main_win.OnLockWindow = {__OnLockWindow,}
-    main_win.OnUnlockWindow = {__OnUnlockWindow,}
-end
-
-function widget:ViewResize(viewSizeX, viewSizeY)
-    if main_win == nil then
-        return
-    end
-    x = WG.PLANESBAROPTS.x * viewSizeX
-    y = WG.PLANESBAROPTS.y * viewSizeY
-    w = WG.PLANESBAROPTS.width * viewSizeX
-    h = WG.PLANESBAROPTS.height * viewSizeY
-    if w < main_win.minWidth then
-        w = main_win.minWidth
-    end
-    if h < main_win.minHeight then
-        h = main_win.minHeight
-    end
-    main_win:SetPosRelative(x, y, w, h, true, false)
-    ResizeContainer()
+	Chili = WG.Chili
+	if not Chili then
+		widgetHandler:RemoveWidget()
+		return
+	end
+	local screenWidth, screenHeight = Spring.GetViewGeometry()
+	window = Chili.Window:New{
+		parent = Chili.Screen0,
+		name = "S44AircraftBar",
+		dockable = false,
+		x = 0,
+		y = TOP_OFFSET,
+		width = BUTTON_SIZE + 12,
+		height = BUTTON_SIZE + 12,
+		padding = {6, 6, 6, 6},
+		draggable = false,
+		resizable = false,
+		tweakDraggable = true,
+		tweakResizable = false,
+		minimizable = false,
+		OnMouseDown = {OpenOptionsOnSpaceClick},
+	}
+	grid = Chili.Grid:New{
+		parent = window,
+		x = 0,
+		y = 0,
+		right = 0,
+		bottom = 0,
+		padding = {0, 0, 0, 0},
+		itemPadding = {0, 0, 0, 0},
+		itemMargin = {0, 0, 0, 0},
+		columns = 1,
+		rows = 1,
+		orientation = "vertical",
+	}
+	GenerateAircraft()
 end
 
 function widget:UnitCreated(unitID, unitDefID, unitTeam)
-    if (unitTeam ~= myTeamID) then
-        return
-    end
-
-    local unitDef = UnitDefs[unitDefID]
-    if unitDef.canFly then
-        __makeAircraft(unitID, unitDefID, unitDef)
-        ResizeContainer()
-    end
+	if unitTeam == myTeamID and UnitDefs[unitDefID].canFly then
+		AddAircraft(unitID, unitDefID)
+	end
 end
 
 function widget:UnitGiven(unitID, unitDefID, unitTeam, oldTeam)
-    widget:UnitCreated(unitID, unitDefID, unitTeam)
+	widget:UnitCreated(unitID, unitDefID, unitTeam)
 end
 
 function widget:UnitDestroyed(unitID, unitDefID, unitTeam)
-    if (unitTeam ~= myTeamID) or (aircrafts[unitID] == nil) then
-        return
-    end
-
-    for i, u in ipairs(aircrafts_iterator) do
-        if u == unitID then
-            table.remove(aircrafts_iterator, i)
-            break
-        end
-    end
-    aircrafts[unitID]:Dispose()
-    aircrafts[unitID] = nil
-    ResizeContainer()
+	RemoveAircraft(unitID)
 end
 
 function widget:UnitTaken(unitID, unitDefID, unitTeam, newTeam)
-    widget:UnitDestroyed(unitID, unitDefID, unitTeam)
+	RemoveAircraft(unitID)
 end
 
 function widget:Update()
-    if myTeamID ~= GetMyTeamID() then
-        myTeamID = GetMyTeamID()
-        GenerateAircrafts()
-        return
-    end
-
-    if #aircrafts_iterator == 0 then
-        return
-    end
-    current_aircraft = (current_aircraft % #aircrafts_iterator) + 1
-    local unitID = aircrafts_iterator[current_aircraft]
-    local button = aircrafts[unitID]
-    local unitDef = button.unitDef
-
-    local sHP, sMaxHP = GetUnitHealth(unitID)
-    button.hbar:SetValue(sHP / sMaxHP * 100)
-
-    local sMaxFuel = unitDef.customParams.maxfuel or 1
-    local sFuel = GetUnitRulesParam(unitID, "fuel") or sMaxFuel
-    button.fbar:SetValue(sFuel / sMaxFuel * 100)
+	if myTeamID ~= GetMyTeamID() then
+		myTeamID = GetMyTeamID()
+		GenerateAircraft()
+		return
+	end
+	local count = #aircraftOrder
+	if count == 0 then
+		return
+	end
+	-- Follow the air support panel above as it grows and shrinks.
+	layoutTimer = layoutTimer + 1
+	if layoutTimer >= 30 then
+		layoutTimer = 0
+		UpdateLayout()
+	end
+	-- One aircraft per frame is enough to keep the bars current.
+	updateIndex = (updateIndex % count) + 1
+	UpdateAircraft(aircraftOrder[updateIndex])
 end
 
 function widget:DrawWorld()
-    local unitID = overAircraft
-    if unitID == nil then
-        return
-    end
-
-    -- hilight the unit we are about to click on
-    glUnit(unitID, true)
-    local ux, uy, uz = GetUnitPosition(unitID)
-
-    -- should help for cases when currently selected plane dies
-    if ux and uy and uz then
-        -- glDrawGroundCircle( ux, uy, uz, 3200, 24 )
-        glDrawGroundCircle( ux, uy, uz, 1600, 20 )
-        glDrawGroundCircle( ux, uy, uz, 800, 16 )
-        glDrawGroundCircle( ux, uy, uz, 400, 12 )
-        glDrawGroundCircle( ux, uy, uz, 200, 8 )
-    end
+	local unitID = hoveredUnitID
+	if not (unitID and options.highlightHovered.value) then
+		return
+	end
+	glUnit(unitID, true)
+	local ux, uy, uz = GetUnitPosition(unitID)
+	if ux then
+		glDrawGroundCircle(ux, uy, uz, 1600, 20)
+		glDrawGroundCircle(ux, uy, uz, 800, 16)
+		glDrawGroundCircle(ux, uy, uz, 400, 12)
+		glDrawGroundCircle(ux, uy, uz, 200, 8)
+	end
 end
 
 function widget:Shutdown()
-    if main_win ~= nil then
-        Chili.RemoveCustomizableWindow(main_win)
-        main_win:Dispose()
-    end
-    container = nil
-    widgetHandler:RemoveAction("resetplanesbar")
-end 
-
-function widget:GetConfigData()
-    return {
-        x      = WG.PLANESBAROPTS.x,
-        y      = WG.PLANESBAROPTS.y,
-        width  = WG.PLANESBAROPTS.width,
-        height = WG.PLANESBAROPTS.height,
-    }
-end
-
-function widget:SetConfigData(data)
-    WG.PLANESBAROPTS.x      = data.x or WG.PLANESBAROPTS.x
-    WG.PLANESBAROPTS.y      = data.y or WG.PLANESBAROPTS.y
-    WG.PLANESBAROPTS.width  = data.width or WG.PLANESBAROPTS.width
-    WG.PLANESBAROPTS.height = data.height or WG.PLANESBAROPTS.height
+	if window then
+		window:Dispose()
+		window = nil
+	end
 end
