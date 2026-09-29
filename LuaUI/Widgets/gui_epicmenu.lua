@@ -104,6 +104,7 @@ local window_flags
 local window_help
 local window_getkey
 local lbl_gtime, lbl_fps, lbl_clock, img_flag
+local engineShowClock
 local cmsettings_index = -1
 local window_sub_cur
 local filterUserInsertedTerm = "" --the term used to search the button list
@@ -2988,8 +2989,12 @@ function widget:Initialize()
 		return
 	end
 	init = true
-	
-	
+
+	-- The menu bar shows the game time; hide the engine's clock while S:44
+	-- runs and restore the player's setting on exit.
+	engineShowClock = Spring.GetConfigInt("ShowClock", 1)
+	spSendCommands("clock 0")
+
 	spSendCommands("unbindaction hotbind")
 	spSendCommands("unbindaction hotunbind")
 	
@@ -3357,6 +3362,9 @@ function widget:Initialize()
 end
 
 function widget:Shutdown()
+	if engineShowClock then
+		spSendCommands("clock " .. engineShowClock)
+	end
 	-- Restore widgethandler functions to original states
 	if widgetHandler.OriginalRemoveWidget then
 		widgetHandler.InsertWidget = widgetHandler.OriginalInsertWidget

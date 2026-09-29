@@ -21,13 +21,14 @@ end
 
 function Spring.Utilities.GetCountryFlagPath(country)
 	if not country or country == '' or country == '??' then
-		country = 'XX'
+		country = 'xx'
 	end
 
-	local filename = "LuaUI/Images/flags/" .. country .. ".png"
+	-- Flag files are named in lower case (the lobby sends upper case codes).
+	local filename = "LuaUI/Images/flags/" .. country:lower() .. ".png"
 	if VFS.FileExists(filename, VFS.GAME) then
 		return filename
 	else
-		return "LuaUI/Images/flags/XX.png"
+		return "LuaUI/Images/flags/xx.png"
 	end
 end

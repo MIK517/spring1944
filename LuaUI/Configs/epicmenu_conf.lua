@@ -517,7 +517,7 @@ local pathHelp = 'Help'
 	{
 		type='text',
 		name='Selection',
-		value = [[Drag-selecting picks combat units first: engineers, supply trucks, buildings and unarmed transports are skipped when the box also holds combat units. Hold Ctrl while drag-selecting to include everything. See Settings/Interface/Selection Filtering.]]
+		value = [[Drag-selecting picks combat units first: engineers, supply trucks, buildings and unarmed transports are skipped when the box also holds combat units. Hold Shift while drag-selecting to include everything, or Alt to pick only the engineers and other support units. Double-clicking a unit selects all visible units of its type. See Settings/Interface/Selection Filtering.]]
 	})
 
 return confdata
