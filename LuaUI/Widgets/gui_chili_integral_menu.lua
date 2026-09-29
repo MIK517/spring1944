@@ -180,7 +180,7 @@ local function SetSmallIcons(wantSmall)
 			y = "4%",
 			right = "5%",
 			bottom = 12,
-			keepAspect = false,
+			keepAspect = true,
 			rectangleAspect = true,
 		}
 		buttonLayoutConfig.build.invisibleButton = false
@@ -189,7 +189,7 @@ local function SetSmallIcons(wantSmall)
 			y = "4%",
 			right = "5%",
 			bottom = 12,
-			keepAspect = false,
+			keepAspect = true,
 			rectangleAspect = true,
 		}
 		buttonLayoutConfig.buildunit.invisibleButton = false

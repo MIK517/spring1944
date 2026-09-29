@@ -18,6 +18,7 @@ local spGetTimer = Spring.GetTimer
 local spDiffTimers = Spring.DiffTimers
 local glActiveTexture = gl.ActiveTexture
 local glCallList = gl.CallList
+local glTexture = gl.Texture
 
 local weakMetaTable = {__mode="k"}
 
@@ -70,6 +71,13 @@ function TextureHandler.LoadTexture(arg1,arg2,arg3)
      activeTexID = 0
      filename = arg1
      obj = arg2
+  end
+
+  --// Unit build pictures ("#unitDefID") are bound directly: a display list
+  --// made while the game is starting can keep a stale texture (drawn white).
+  if (type(filename) == 'string') and (filename:byte(1) == 35) then
+    glActiveTexture(activeTexID,glTexture,filename)
+    return
   end
 
   local tex = loaded[filename]

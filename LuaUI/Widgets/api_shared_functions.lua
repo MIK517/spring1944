@@ -36,11 +36,9 @@ local function GetSquareBuildTexture(udef)
 	return ("#" .. udef.id)
 end
 
+-- Zero-K has separate 9:11 pictures; S:44 only has its square build pictures.
 local function GetRectangleBuildTexture(udef)
-	if not udef.buildpicname then
-		return false
-	end
-	return ":l:unitpics_9_11/" .. udef.buildpicname
+	return ("#" .. udef.id)
 end
 
 --------------------------------------------------------------------------------
