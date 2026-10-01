@@ -82,10 +82,10 @@ local FGInfGun = InfantryGun:New{
 
     weapons = {
         [1] = { -- HE
-            maxAngleDif = 5,
+            maxAngleDif = 30, -- cone is 3D: also the max elevation to target
         },
         [2] = { -- AP
-            maxAngleDif = 5,
+            maxAngleDif = 30, -- cone is 3D: also the max elevation to target
         },
     },
     customParams = {
@@ -102,10 +102,10 @@ local HInfGun = InfantryGun:New{
 
     weapons = {
         [1] = { -- HE
-            maxAngleDif = 5,
+            maxAngleDif = 35, -- cone is 3D: also the max elevation to target
         },
         [2] = { -- Smoke
-            maxAngleDif = 5,
+            maxAngleDif = 35, -- cone is 3D: also the max elevation to target
         },
     },
     customParams = {
@@ -125,7 +125,7 @@ local RInfGun = InfantryGun:New{
 
     weapons = {
         [1] = { -- Rocket
-            maxAngleDif = 5,
+            maxAngleDif = 30, -- cone is 3D: also the max elevation to target
         },
     },
     customParams = {

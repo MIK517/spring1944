@@ -9,7 +9,7 @@ local USM8Gun = InfantryGun:New{
 
 	weapons = {
 		[1] = { -- HE
-			maxAngleDif		= 5,
+			maxAngleDif		= 30,
 			name			= "M875mmHE",
 		},
 	},
