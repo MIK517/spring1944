@@ -32,9 +32,11 @@ local SIG_AIM = 1
 local SIG_FIRE = 2
 local SIG_MOVE = 4
 local SIG_ANIM = 16
+local SIG_CENTER = 32
 
 local DEFAULT_TURN_SPEED = math.rad(300)
 local REAIM_THRESHOLD = 0.15
+local CENTERED_THRESHOLD = math.rad(1)
 
 local FEAR_PINNED = 20  -- Copy from Infantry.lua
 
@@ -52,6 +54,7 @@ local passengersIDs = {}
 local weaponEnabled = {}
 local moving = false
 local pinned = false
+local centering = false -- turning the barrel back to travel position
 
 -- For rocket launchers (e.g. nebelwerfer)
 local tubes = piece "tubes"
@@ -68,7 +71,7 @@ end
 
 local function UpdateSpeed()
     local speedMult = 1.0
-    if pinned then
+    if pinned or centering then
         speedMult = 0
     end
     SetUnitRulesParam(unitID, "fear_movement", speedMult)
@@ -149,6 +152,30 @@ local function ReAim(newHeading, newPitch)
 end
 
 
+local function IsCentered()
+    local _, heading = Spring.UnitScript.GetPieceRotation(weaponTags.headingPiece)
+    local pitch = Spring.UnitScript.GetPieceRotation(weaponTags.pitchPiece)
+    return abs(heading) < CENTERED_THRESHOLD and abs(pitch) < CENTERED_THRESHOLD
+end
+
+
+-- Turn the barrel back to the travel position before the gun rolls off.
+-- The gun is held in place (speed 0) meanwhile; once released the engine
+-- calls StartMoving again as the gun picks up speed.
+local function CenterGun()
+    SetSignalMask(SIG_CENTER)
+    Turn(weaponTags.headingPiece, y_axis, 0, info.turretTurnSpeed)
+    Turn(weaponTags.pitchPiece, x_axis, 0, info.elevationSpeed)
+    WaitForTurn(weaponTags.headingPiece, y_axis)
+    WaitForTurn(weaponTags.pitchPiece, x_axis)
+    currentHeading = 0
+    currentPitch = 0
+    centering = false
+    UpdateSpeed()
+    GG.ApplySpeedChanges(unitID)
+end
+
+
 function script.Create()
     if flare then
         Hide(flare)
@@ -199,6 +226,17 @@ local function StopWheels()
 end
 
 function script.StartMoving()
+    if not centering and not IsCentered() then
+        centering = true
+        Signal(SIG_AIM) -- drop any aim in progress
+        StartThread(CenterGun)
+        UpdateSpeed()
+        GG.ApplySpeedChanges(unitID)
+    end
+    if centering then
+        return
+    end
+
     Signal(SIG_MOVE)
     moving = true
 
@@ -252,7 +290,7 @@ local function IsLoaded()
 end
 
 local function CanAim()
-    return UnitDef.transportCapacity == passengers and not (moving or pinned)
+    return UnitDef.transportCapacity == passengers and not (moving or pinned or centering)
 end
 
 local function Recoil()
